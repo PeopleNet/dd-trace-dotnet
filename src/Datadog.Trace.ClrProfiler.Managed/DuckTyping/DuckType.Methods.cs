@@ -13,9 +13,9 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
     {
         private static List<MethodInfo> GetMethods(Type baseType)
         {
-            var selectedMethods = new List<MethodInfo>(GetBaseMethods(baseType));
-            var implementedInterfaces = baseType.GetInterfaces();
-            foreach (var imInterface in implementedInterfaces)
+            List<MethodInfo> selectedMethods = new List<MethodInfo>(GetBaseMethods(baseType));
+            Type[] implementedInterfaces = baseType.GetInterfaces();
+            foreach (Type imInterface in implementedInterfaces)
             {
                 if (imInterface == typeof(IDuckType) || imInterface == typeof(IDuckTypeClass))
                 {
@@ -23,7 +23,16 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                 }
 
                 var newMethods = imInterface.GetMethods()
-                    .Where(m => !m.IsSpecialName && selectedMethods.All(i => i.ToString() != m.ToString()));
+                    .Where(iMethod =>
+                    {
+                        if (iMethod.IsSpecialName)
+                        {
+                            return false;
+                        }
+
+                        string iMethodString = iMethod.ToString();
+                        return selectedMethods.All(i => i.ToString() != iMethodString);
+                    });
                 selectedMethods.AddRange(newMethods);
             }
 
@@ -32,7 +41,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             {
                 foreach (var method in baseType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                 {
-                    if (method.IsSpecialName || method.IsFinal || method.IsPrivate || method.DeclaringType == typeof(DuckType))
+                    if (method.IsSpecialName || method.IsFinal || method.IsPrivate)
                     {
                         continue;
                     }
@@ -47,131 +56,131 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
         private static void CreateMethods(TypeBuilder proxyTypeBuilder, Type proxyType, Type targetType, FieldInfo instanceField)
         {
-            var selectedMethods = GetMethods(proxyType);
-            foreach (var iMethod in selectedMethods)
+            List<MethodInfo> proxyMethodsDefinitions = GetMethods(proxyType);
+            foreach (MethodInfo proxyMethodDefinition in proxyMethodsDefinitions)
             {
-                var iMethodParameters = iMethod.GetParameters();
-                var iMethodParametersTypes = iMethodParameters.Select(p => p.ParameterType).ToArray();
+                // Extract the method parameters types
+                ParameterInfo[] proxyMethodDefinitionParameters = proxyMethodDefinition.GetParameters();
+                Type[] proxyMethodDefinitionParametersTypes = proxyMethodDefinitionParameters.Select(p => p.ParameterType).ToArray();
 
-                // We select the method to call
-                var method = SelectMethod(targetType, iMethod, iMethodParameters, iMethodParametersTypes);
-                if (method is null && iMethod.IsVirtual)
+                // We select the target method to call
+                MethodInfo targetMethod = SelectTargetMethod(targetType, proxyMethodDefinition, proxyMethodDefinitionParameters, proxyMethodDefinitionParametersTypes);
+                if (targetMethod is null && proxyMethodDefinition.IsVirtual)
                 {
-                    continue;
+                    throw new DuckTypeTargetMethodNotFoundException(proxyMethodDefinition);
                 }
 
-                var attributes = iMethod.IsAbstract || iMethod.IsVirtual
-                    ? MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig
-                    : MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot;
-
-                var paramBuilders = new ParameterBuilder[iMethodParameters.Length];
-                var methodBuilder = proxyTypeBuilder.DefineMethod(iMethod.Name, attributes, iMethod.ReturnType, iMethodParametersTypes);
-
-                var iMethodGenericArguments = iMethod.GetGenericArguments();
-                var iMethodGenericNames = iMethodGenericArguments.Select((t, i) => "T" + (i + 1)).ToArray();
-                if (iMethodGenericNames.Length > 0)
+                // Make sure we have the right methods attributes, for proxy methods declared in abstract and virtual classes
+                // a new slot on the vtable is not required, for interfaces is required.
+                MethodAttributes proxyMethodAttributes = MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig;
+                if (!proxyMethodDefinition.IsAbstract && !proxyMethodDefinition.IsVirtual)
                 {
-                    var genericParameters = methodBuilder.DefineGenericParameters(iMethodGenericNames);
+                    proxyMethodAttributes |= MethodAttributes.NewSlot;
                 }
 
-                for (var j = 0; j < iMethodParameters.Length; j++)
+                // Gets the proxy method definition generic arguments
+                Type[] proxyMethodDefinitionGenericArguments = proxyMethodDefinition.GetGenericArguments();
+                string[] proxyMethodDefinitionGenericArgumentsNames = proxyMethodDefinitionGenericArguments.Select((t, i) => "T" + (i + 1)).ToArray();
+
+                // Create the proxy method implementation
+                ParameterBuilder[] proxyMethodParametersBuilders = new ParameterBuilder[proxyMethodDefinitionParameters.Length];
+                MethodBuilder proxyMethod = proxyTypeBuilder.DefineMethod(proxyMethodDefinition.Name, proxyMethodAttributes, proxyMethodDefinition.ReturnType, proxyMethodDefinitionParametersTypes);
+                if (proxyMethodDefinitionGenericArgumentsNames.Length > 0)
                 {
-                    var cParam = iMethodParameters[j];
-                    var nParam = methodBuilder.DefineParameter(j, cParam.Attributes, cParam.Name);
-                    if (cParam.HasDefaultValue)
+                    proxyMethod.DefineGenericParameters(proxyMethodDefinitionGenericArgumentsNames);
+                }
+
+                // Create the proxy method implementation parameters
+                for (var j = 0; j < proxyMethodDefinitionParameters.Length; j++)
+                {
+                    ParameterInfo pmDefParameter = proxyMethodDefinitionParameters[j];
+                    ParameterBuilder pmImpParameter = proxyMethod.DefineParameter(j, pmDefParameter.Attributes, pmDefParameter.Name);
+                    if (pmDefParameter.HasDefaultValue)
                     {
-                        nParam.SetConstant(cParam.RawDefaultValue);
+                        pmImpParameter.SetConstant(pmDefParameter.RawDefaultValue);
                     }
 
-                    paramBuilders[j] = nParam;
+                    proxyMethodParametersBuilders[j] = pmImpParameter;
                 }
 
-                var il = methodBuilder.GetILGenerator();
+                var il = proxyMethod.GetILGenerator();
                 var publicInstance = targetType.IsPublic || targetType.IsNestedPublic;
-
-                if (method is null)
-                {
-                    il.Emit(OpCodes.Newobj, typeof(NotImplementedException).GetConstructor(Type.EmptyTypes));
-                    il.Emit(OpCodes.Throw);
-                    continue;
-                }
-
                 var innerDuck = false;
-                var iMethodReturnType = iMethod.ReturnType;
+                var iMethodReturnType = proxyMethodDefinition.ReturnType;
                 if (iMethodReturnType.IsGenericType)
                 {
                     iMethodReturnType = iMethodReturnType.GetGenericTypeDefinition();
                 }
 
-                if (iMethod.ReturnType != method.ReturnType &&
-                    !iMethod.ReturnType.IsValueType && !iMethod.ReturnType.IsAssignableFrom(method.ReturnType) &&
-                    !iMethod.ReturnType.IsGenericParameter && !method.ReturnType.IsGenericParameter)
+                if (proxyMethodDefinition.ReturnType != targetMethod.ReturnType &&
+                    !proxyMethodDefinition.ReturnType.IsValueType && !proxyMethodDefinition.ReturnType.IsAssignableFrom(targetMethod.ReturnType) &&
+                    !proxyMethodDefinition.ReturnType.IsGenericParameter && !targetMethod.ReturnType.IsGenericParameter)
                 {
-                    il.Emit(OpCodes.Ldtoken, iMethod.ReturnType);
+                    il.Emit(OpCodes.Ldtoken, proxyMethodDefinition.ReturnType);
                     il.EmitCall(OpCodes.Call, Util.GetTypeFromHandleMethodInfo, null);
                     innerDuck = true;
                 }
 
                 // Create generic method call
-                if (iMethodGenericArguments.Length > 0)
+                if (proxyMethodDefinitionGenericArguments.Length > 0)
                 {
-                    method = method.MakeGenericMethod(iMethodGenericArguments);
+                    targetMethod = targetMethod.MakeGenericMethod(proxyMethodDefinitionGenericArguments);
                 }
 
                 if (publicInstance)
                 {
                     // Load instance
-                    if (!method.IsStatic)
+                    if (!targetMethod.IsStatic)
                     {
                         ILHelpers.LoadInstance(il, instanceField, targetType);
                     }
 
                     // Load arguments
-                    var parameters = method.GetParameters();
-                    var minParametersLength = Math.Min(parameters.Length, iMethodParameters.Length);
+                    var parameters = targetMethod.GetParameters();
+                    var minParametersLength = Math.Min(parameters.Length, proxyMethodDefinitionParameters.Length);
                     for (var i = 0; i < minParametersLength; i++)
                     {
                         // Load value
-                        ILHelpers.WriteLoadArgument(i, il, iMethod.IsStatic);
-                        var iPType = Util.GetRootType(iMethodParameters[i].ParameterType);
+                        ILHelpers.WriteLoadArgument(i, il, proxyMethodDefinition.IsStatic);
+                        var iPType = Util.GetRootType(proxyMethodDefinitionParameters[i].ParameterType);
                         var pType = Util.GetRootType(parameters[i].ParameterType);
                         ILHelpers.TypeConversion(il, iPType, pType);
                     }
 
                     // Call method
-                    if (method.IsPublic)
+                    if (targetMethod.IsPublic)
                     {
-                        il.EmitCall(method.IsStatic ? OpCodes.Call : OpCodes.Callvirt, method, null);
+                        il.EmitCall(targetMethod.IsStatic ? OpCodes.Call : OpCodes.Callvirt, targetMethod, null);
                     }
                     else
                     {
-                        il.Emit(OpCodes.Ldc_I8, (long)method.MethodHandle.GetFunctionPointer());
+                        il.Emit(OpCodes.Ldc_I8, (long)targetMethod.MethodHandle.GetFunctionPointer());
                         il.Emit(OpCodes.Conv_I);
                         il.EmitCalli(
                             OpCodes.Calli,
-                            method.CallingConvention,
-                            method.ReturnType,
-                            method.GetParameters().Select(p => p.ParameterType).ToArray(),
+                            targetMethod.CallingConvention,
+                            targetMethod.ReturnType,
+                            targetMethod.GetParameters().Select(p => p.ParameterType).ToArray(),
                             null);
                     }
 
                     // Covert return value
-                    if (method.ReturnType != typeof(void))
+                    if (targetMethod.ReturnType != typeof(void))
                     {
                         if (innerDuck)
                         {
-                            ILHelpers.TypeConversion(il, method.ReturnType, typeof(object));
+                            ILHelpers.TypeConversion(il, targetMethod.ReturnType, typeof(object));
                             il.EmitCall(OpCodes.Call, DuckTypeCreateMethodInfo, null);
                         }
-                        else if (method.ReturnType != iMethod.ReturnType)
+                        else if (targetMethod.ReturnType != proxyMethodDefinition.ReturnType)
                         {
-                            ILHelpers.TypeConversion(il, method.ReturnType, iMethod.ReturnType);
+                            ILHelpers.TypeConversion(il, targetMethod.ReturnType, proxyMethodDefinition.ReturnType);
                         }
                     }
                 }
                 else
                 {
-                    if (!method.IsStatic)
+                    if (!targetMethod.IsStatic)
                     {
                         il.Emit(OpCodes.Ldarg_0);
                         il.Emit(OpCodes.Ldfld, instanceField);
@@ -182,8 +191,8 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     }
 
                     // Load arguments
-                    var parameters = method.GetParameters();
-                    var minParametersLength = Math.Min(parameters.Length, iMethodParameters.Length);
+                    var parameters = targetMethod.GetParameters();
+                    var minParametersLength = Math.Min(parameters.Length, proxyMethodDefinitionParameters.Length);
                     ILHelpers.WriteIlIntValue(il, minParametersLength);
                     il.Emit(OpCodes.Newarr, typeof(object));
                     for (var i = 0; i < minParametersLength; i++)
@@ -191,15 +200,15 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                         // Load value
                         il.Emit(OpCodes.Dup);
                         ILHelpers.WriteIlIntValue(il, i);
-                        ILHelpers.WriteLoadArgument(i, il, iMethod.IsStatic);
-                        var iPType = Util.GetRootType(iMethodParameters[i].ParameterType);
+                        ILHelpers.WriteLoadArgument(i, il, proxyMethodDefinition.IsStatic);
+                        var iPType = Util.GetRootType(proxyMethodDefinitionParameters[i].ParameterType);
                         ILHelpers.TypeConversion(il, iPType, typeof(object));
                         il.Emit(OpCodes.Stelem_Ref);
                     }
 
                     var dynParameters = new[] { typeof(object), typeof(object[]) };
-                    var dynMethod = new DynamicMethod("callDyn_" + method.Name, typeof(object), dynParameters, typeof(DuckType).Module, true);
-                    CreateMethodAccessor(dynMethod.GetILGenerator(), method, false);
+                    var dynMethod = new DynamicMethod("callDyn_" + targetMethod.Name, typeof(object), dynParameters, typeof(DuckType).Module, true);
+                    CreateMethodAccessor(dynMethod.GetILGenerator(), targetMethod, false);
                     var handle = GetRuntimeHandle(dynMethod);
 
                     il.Emit(OpCodes.Ldc_I8, (long)handle.GetFunctionPointer());
@@ -208,15 +217,15 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     DynamicMethods.Add(dynMethod);
 
                     // Convert return value
-                    if (method.ReturnType != typeof(void))
+                    if (targetMethod.ReturnType != typeof(void))
                     {
                         if (innerDuck)
                         {
                             il.EmitCall(OpCodes.Call, DuckTypeCreateMethodInfo, null);
                         }
-                        else if (iMethod.ReturnType != typeof(object))
+                        else if (proxyMethodDefinition.ReturnType != typeof(object))
                         {
-                            ILHelpers.TypeConversion(il, typeof(object), iMethod.ReturnType);
+                            ILHelpers.TypeConversion(il, typeof(object), proxyMethodDefinition.ReturnType);
                         }
                     }
                     else
@@ -229,7 +238,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             }
         }
 
-        private static MethodInfo SelectMethod(Type targetType, MethodInfo proxyMethod, ParameterInfo[] parameters, Type[] parametersTypes)
+        private static MethodInfo SelectTargetMethod(Type targetType, MethodInfo proxyMethod, ParameterInfo[] parameters, Type[] parametersTypes)
         {
             var asmVersion = targetType.Assembly.GetName().Version;
             var duckAttrs = proxyMethod.GetCustomAttributes<DuckAttribute>(true).ToList();

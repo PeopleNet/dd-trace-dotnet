@@ -14,28 +14,37 @@ namespace Benchmarks.Trace.DuckTyping
     [MemoryDiagnoser]
     public class ValueTypeFieldBenchmark
     {
-        private static IObscureDuckType[] proxies;
+        [ParamsSource(nameof(Proxies))]
+        public ProxyItem InstanceType { get; set; }
 
-        static ValueTypeFieldBenchmark()
+        public readonly struct ProxyItem
         {
-            proxies = new IObscureDuckType[]
+            private readonly string _name;
+            public readonly IObscureDuckType Proxy;
+
+            public ProxyItem(string name, IObscureDuckType proxy)
             {
-                ObscureObject.GetFieldPublicObject().As<IObscureDuckType>(),
-                ObscureObject.GetFieldInternalObject().As<IObscureDuckType>(),
-                ObscureObject.GetFieldPrivateObject().As<IObscureDuckType>()
-            };
+                _name = name;
+                Proxy = proxy;
+            }
+
+            public override string ToString()
+            {
+                return _name;
+            }
         }
 
-        [ParamsAllValues]
-        public InstanceTypes InstanceType { get; set; }
-
-        public IObscureDuckType Proxy => proxies[(int)InstanceType];
-
-        public enum InstanceTypes
+        public static IEnumerable<ProxyItem> Proxies()
         {
-            Public, 
-            Internal,
-            Private
+            yield return new ProxyItem("Public", ObscureObject.GetFieldPublicObject().As<IObscureDuckType>());
+            yield return new ProxyItem("Internal", ObscureObject.GetFieldInternalObject().As<IObscureDuckType>());
+            yield return new ProxyItem("Private", ObscureObject.GetFieldPrivateObject().As<IObscureDuckType>());
+        }
+
+        [Benchmark(Baseline = true)]
+        public IObscureDuckType GetProxy()
+        {
+            return InstanceType.Proxy;
         }
 
         /**
@@ -45,25 +54,25 @@ namespace Benchmarks.Trace.DuckTyping
         [Benchmark]
         public int GetPublicStaticField()
         {
-            return Proxy.PublicStaticValueTypeField;
+            return InstanceType.Proxy.PublicStaticValueTypeField;
         }
 
         [Benchmark]
         public int GetInternalStaticField()
         {
-            return Proxy.InternalStaticValueTypeField;
+            return InstanceType.Proxy.InternalStaticValueTypeField;
         }
 
         [Benchmark]
         public int GetProtectedStaticField()
         {
-            return Proxy.ProtectedStaticValueTypeField;
+            return InstanceType.Proxy.ProtectedStaticValueTypeField;
         }
 
         [Benchmark]
         public int GetPrivateStaticField()
         {
-            return Proxy.PrivateStaticValueTypeField;
+            return InstanceType.Proxy.PrivateStaticValueTypeField;
         }
 
 
@@ -74,25 +83,25 @@ namespace Benchmarks.Trace.DuckTyping
         [Benchmark]
         public void SetPublicStaticField()
         {
-            Proxy.PublicStaticValueTypeField = 42;
+            InstanceType.Proxy.PublicStaticValueTypeField = 42;
         }
 
         [Benchmark]
         public void SetInternalStaticField()
         {
-            Proxy.InternalStaticValueTypeField = 42;
+            InstanceType.Proxy.InternalStaticValueTypeField = 42;
         }
 
         [Benchmark]
         public void SetProtectedStaticField()
         {
-            Proxy.ProtectedStaticValueTypeField = 42;
+            InstanceType.Proxy.ProtectedStaticValueTypeField = 42;
         }
 
         [Benchmark]
         public void SetPrivateStaticField()
         {
-            Proxy.PrivateStaticValueTypeField = 42;
+            InstanceType.Proxy.PrivateStaticValueTypeField = 42;
         }
 
 
@@ -103,25 +112,25 @@ namespace Benchmarks.Trace.DuckTyping
         [Benchmark]
         public int GetPublicField()
         {
-            return Proxy.PublicValueTypeField;
+            return InstanceType.Proxy.PublicValueTypeField;
         }
 
         [Benchmark]
         public int GetInternalField()
         {
-            return Proxy.InternalValueTypeField;
+            return InstanceType.Proxy.InternalValueTypeField;
         }
 
         [Benchmark]
         public int GetProtectedField()
         {
-            return Proxy.ProtectedValueTypeField;
+            return InstanceType.Proxy.ProtectedValueTypeField;
         }
 
         [Benchmark]
         public int GetPrivateField()
         {
-            return Proxy.PrivateValueTypeField;
+            return InstanceType.Proxy.PrivateValueTypeField;
         }
 
 
@@ -132,25 +141,25 @@ namespace Benchmarks.Trace.DuckTyping
         [Benchmark]
         public void SetPublicField()
         {
-            Proxy.PublicValueTypeField = 42;
+            InstanceType.Proxy.PublicValueTypeField = 42;
         }
 
         [Benchmark]
         public void SetInternalField()
         {
-            Proxy.InternalValueTypeField = 42;
+            InstanceType.Proxy.InternalValueTypeField = 42;
         }
 
         [Benchmark]
         public void SetProtectedField()
         {
-            Proxy.ProtectedValueTypeField = 42;
+            InstanceType.Proxy.ProtectedValueTypeField = 42;
         }
 
         [Benchmark]
         public void SetPrivateField()
         {
-            Proxy.PrivateValueTypeField = 42;
+            InstanceType.Proxy.PrivateValueTypeField = 42;
         }
 
 

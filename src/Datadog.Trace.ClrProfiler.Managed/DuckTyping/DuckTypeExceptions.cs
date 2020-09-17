@@ -103,4 +103,15 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
         {
         }
     }
+
+    /// <summary>
+    /// DuckType target method can not be found exception
+    /// </summary>
+    public class DuckTypeTargetMethodNotFoundException : DuckTypeException
+    {
+        internal DuckTypeTargetMethodNotFoundException(MethodInfo method)
+            : base($"The target method for the proxy method '{method.ToString()}' was not found.")
+        {
+        }
+    }
 }
