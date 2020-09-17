@@ -43,13 +43,13 @@ namespace Datadog.Trace.ClrProfiler.Integrations
         /// <param name="mdToken">The mdToken of the original method call.</param>
         /// <param name="moduleVersionPtr">A pointer to the module version GUID.</param>
         /// <returns>Returns the value returned by the inner method call.</returns>
-        [InterceptMethod(
+        /*[InterceptMethod(
             TargetAssembly = SystemNetHttp,
             TargetType = HttpMessageHandler,
             TargetMethod = SendAsync,
             TargetSignatureTypes = new[] { ClrNames.HttpResponseMessageTask, ClrNames.HttpRequestMessage, ClrNames.CancellationToken },
             TargetMinimumVersion = Major4,
-            TargetMaximumVersion = Major4)]
+            TargetMaximumVersion = Major4)]*/
         public static object HttpMessageHandler_SendAsync(
             object handler,
             object request,
@@ -143,13 +143,13 @@ namespace Datadog.Trace.ClrProfiler.Integrations
         /// <param name="mdToken">The mdToken of the original method call.</param>
         /// <param name="moduleVersionPtr">A pointer to the module version GUID.</param>
         /// <returns>Returns the value returned by the inner method call.</returns>
-        [InterceptMethod(
+        /*[InterceptMethod(
             TargetAssembly = SystemNetHttp,
             TargetType = HttpClientHandlerConst,
             TargetMethod = SendAsync,
             TargetSignatureTypes = new[] { ClrNames.HttpResponseMessageTask, ClrNames.HttpRequestMessage, ClrNames.CancellationToken },
             TargetMinimumVersion = Major4,
-            TargetMaximumVersion = Major4)]
+            TargetMaximumVersion = Major4)]*/
         public static object HttpClientHandler_SendAsync(
             object handler,
             object request,
