@@ -34,50 +34,6 @@ namespace Datadog.Trace.ClrProfiler.CallTarget.DuckTyping
         }
 
         /// <summary>
-        /// Get inner IDuckTypeClass
-        /// </summary>
-        /// <param name="field">Field reference</param>
-        /// <param name="proxyType">Proxy type</param>
-        /// <param name="value">Property value</param>
-        /// <returns>DuckType instance</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public static IDuckTypeClass GetInnerDuckType(ref IDuckTypeClass field, Type proxyType, object value)
-        {
-            if (value is null)
-            {
-                field = null;
-                return null;
-            }
-
-            var valueType = value.GetType();
-            if (field is null || field.Type != valueType)
-            {
-                CreateTypeResult result = GetOrCreateProxyType(proxyType, valueType);
-                result.ExceptionInfo?.Throw();
-                field = (IDuckTypeClass)Activator.CreateInstance(result.ProxyType, value);
-            }
-            else
-            {
-                field.SetInstance(value);
-            }
-
-            return field;
-        }
-
-        /// <summary>
-        /// Set inner DuckType
-        /// </summary>
-        /// <param name="field">Field reference</param>
-        /// <param name="value">Proxy type instance</param>
-        /// <returns>Property value</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public static object SetInnerDuckType(ref IDuckTypeClass field, IDuckTypeClass value)
-        {
-            field = value;
-            return field?.Instance;
-        }
-
-        /// <summary>
         /// Gets the DuckType value for a class DuckType chaining value
         /// </summary>
         /// <param name="originalValue">Original obscure value</param>
@@ -125,6 +81,19 @@ namespace Datadog.Trace.ClrProfiler.CallTarget.DuckTyping
             CreateTypeResult result = GetOrCreateProxyType(proxyType, originalValue.GetType());
             result.ExceptionInfo?.Throw();
             return (IDuckType)Activator.CreateInstance(result.ProxyType, originalValue);
+        }
+
+        /// <summary>
+        /// Set inner DuckType
+        /// </summary>
+        /// <param name="field">Field reference</param>
+        /// <param name="value">Proxy type instance</param>
+        /// <returns>Property value</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public static object SetInnerDuckType(ref IDuckTypeClass field, IDuckTypeClass value)
+        {
+            field = value;
+            return field?.Instance;
         }
 
         internal static TProxyInstance CreateProxyTypeInstance<TProxyInstance>(object value)

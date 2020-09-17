@@ -28,16 +28,13 @@ namespace Datadog.Trace.ClrProfiler.CallTarget.DuckTyping
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static readonly MethodInfo DuckTypeCreateMethodInfo = typeof(DuckType).GetMethod(nameof(DuckType.Create), BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(Type), typeof(object) }, null);
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private static readonly MethodInfo GetInnerDuckTypeMethodInfo = typeof(DuckType).GetMethod(nameof(GetInnerDuckType), BindingFlags.Static | BindingFlags.Public);
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private static readonly MethodInfo SetInnerDuckTypeMethodInfo = typeof(DuckType).GetMethod(nameof(SetInnerDuckType), BindingFlags.Static | BindingFlags.Public);
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static readonly PropertyInfo DuckTypeInstancePropertyInfo = typeof(IDuckType).GetProperty(nameof(IDuckType.Instance));
-
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static readonly MethodInfo GetClassDuckTypeChainningValueMethodInfo = typeof(DuckType).GetMethod(nameof(GetClassDuckTypeChainningValue), BindingFlags.Static | BindingFlags.Public);
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static readonly MethodInfo GetStructDuckTypeChainningValueMethodInfo = typeof(DuckType).GetMethod(nameof(GetStructDuckTypeChainningValue), BindingFlags.Static | BindingFlags.Public);
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+        private static readonly MethodInfo SetInnerDuckTypeMethodInfo = typeof(DuckType).GetMethod(nameof(SetInnerDuckType), BindingFlags.Static | BindingFlags.Public);
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static ModuleBuilder _moduleBuilder = null;

@@ -77,7 +77,7 @@ namespace Datadog.Trace.ClrProfiler.CallTarget.DuckTyping
                 il.EmitCalli(OpCodes.Calli, dynMethod.CallingConvention, returnType, dynParameters, null);
             }
 
-            // Check if the type can be converted of if we need to enable duck chaining
+            // Check if the type can be converted or if we need to enable duck chaining
             if (proxyProperty.PropertyType != targetField.FieldType && !proxyProperty.PropertyType.IsValueType && !proxyProperty.PropertyType.IsAssignableFrom(targetField.FieldType))
             {
                 // If we are in a duck chaining scenario we convert the field value to an object and push it to the stack
