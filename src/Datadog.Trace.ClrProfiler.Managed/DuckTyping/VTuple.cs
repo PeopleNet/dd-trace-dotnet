@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Datadog.Trace.ClrProfiler.CallTarget.DuckTyping
+namespace Datadog.Trace.ClrProfiler.DuckTyping
 {
     /// <summary>
     /// Value Tuple struct

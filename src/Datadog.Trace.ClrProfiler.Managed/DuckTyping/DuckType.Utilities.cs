@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Reflection.Emit;
 
-namespace Datadog.Trace.ClrProfiler.CallTarget.DuckTyping
+namespace Datadog.Trace.ClrProfiler.DuckTyping
 {
     /// <summary>
     /// Duck Type

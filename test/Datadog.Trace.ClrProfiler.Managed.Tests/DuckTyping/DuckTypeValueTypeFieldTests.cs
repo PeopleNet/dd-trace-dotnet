@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using Datadog.Trace.ClrProfiler.CallTarget.DuckTyping;
+using Datadog.Trace.ClrProfiler.DuckTyping;
 using Xunit;
 
 #pragma warning disable SA1201 // Elements must appear in the correct order
 
-namespace Datadog.Trace.ClrProfiler.Managed.Tests.CallTarget.DuckTyping
+namespace Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping
 {
     public class DuckTypeValueTypeFieldTests
     {

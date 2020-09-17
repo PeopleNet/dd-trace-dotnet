@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 #pragma warning disable IDE0044 // Add readonly modifier
 #pragma warning disable 414
 
-namespace Datadog.Trace.ClrProfiler.Managed.Tests.CallTarget.DuckTyping
+namespace Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping
 {
     public class ObscureObject
     {

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Datadog.Trace.ClrProfiler.CallTarget;
-using Datadog.Trace.ClrProfiler.CallTarget.DuckTyping;
+using Datadog.Trace.ClrProfiler.DuckTyping;
 using Datadog.Trace.ClrProfiler.Helpers;
 using Datadog.Trace.Logging;
 

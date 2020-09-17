@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
-using Datadog.Trace.ClrProfiler.CallTarget.DuckTyping;
+using Datadog.Trace.ClrProfiler.DuckTyping;
 using Datadog.Trace.ClrProfiler.Integrations.Testing;
 using Datadog.Trace.Logging;
 

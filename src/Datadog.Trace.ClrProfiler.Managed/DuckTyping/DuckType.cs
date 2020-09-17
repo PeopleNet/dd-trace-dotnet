@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.ExceptionServices;
 
-namespace Datadog.Trace.ClrProfiler.CallTarget.DuckTyping
+namespace Datadog.Trace.ClrProfiler.DuckTyping
 {
     /// <summary>
     /// Duck Type
