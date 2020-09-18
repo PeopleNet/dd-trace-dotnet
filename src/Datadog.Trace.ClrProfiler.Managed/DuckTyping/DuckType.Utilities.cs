@@ -34,44 +34,13 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
         }
 
         /// <summary>
-        /// Gets the DuckType value for a class DuckType chaining value
-        /// </summary>
-        /// <param name="originalValue">Original obscure value</param>
-        /// <param name="proxyType">Proxy type</param>
-        /// <param name="field">IDuckTypeClass field if the proxyType is a class</param>
-        /// <returns>IDuckType instance</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public static IDuckType GetClassDuckTypeChainningValue(object originalValue, Type proxyType, ref IDuckTypeClass field)
-        {
-            if (originalValue is null)
-            {
-                field?.SetInstance(null);
-                return null;
-            }
-
-            var valueType = originalValue.GetType();
-            if (field is null || field.Type != valueType)
-            {
-                CreateTypeResult result = GetOrCreateProxyType(proxyType, valueType);
-                result.ExceptionInfo?.Throw();
-                field = (IDuckTypeClass)Activator.CreateInstance(result.ProxyType, originalValue);
-            }
-            else
-            {
-                field.SetInstance(originalValue);
-            }
-
-            return field;
-        }
-
-        /// <summary>
-        /// Gets the DuckType value for a struct DuckType chaining value
+        /// Gets the DuckType value for a DuckType chaining value
         /// </summary>
         /// <param name="originalValue">Original obscure value</param>
         /// <param name="proxyType">Proxy type</param>
         /// <returns>IDuckType instance</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public static IDuckType GetStructDuckTypeChainningValue(object originalValue, Type proxyType)
+        public static IDuckType GetDuckTypeChainningValue(object originalValue, Type proxyType)
         {
             if (originalValue is null)
             {
@@ -81,19 +50,6 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             CreateTypeResult result = GetOrCreateProxyType(proxyType, originalValue.GetType());
             result.ExceptionInfo?.Throw();
             return (IDuckType)Activator.CreateInstance(result.ProxyType, originalValue);
-        }
-
-        /// <summary>
-        /// Set inner DuckType
-        /// </summary>
-        /// <param name="field">Field reference</param>
-        /// <param name="value">Proxy type instance</param>
-        /// <returns>Property value</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public static object SetInnerDuckType(ref IDuckTypeClass field, IDuckTypeClass value)
-        {
-            field = value;
-            return field?.Instance;
         }
 
         internal static TProxyInstance CreateProxyTypeInstance<TProxyInstance>(object value)
@@ -111,24 +67,35 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             }
         }
 
-        private static class ProxyActivator<TProxy>
+        internal static class ProxyActivator<TProxy>
         {
-            private static Func<InstanceWrapper, TProxy> _converter;
+            private delegate ref TProxy ConverterDelegate(ref InstanceWrapper wrapper);
+
+#pragma warning disable SA1201 // Elements must appear in the correct order
+            private static readonly ConverterDelegate _converter;
+#pragma warning restore SA1201 // Elements must appear in the correct order
 
             static ProxyActivator()
             {
-                DynamicMethod converterMethod = new DynamicMethod($"WrapperConverter<{typeof(TProxy).Name}>._converter", typeof(TProxy), new[] { typeof(InstanceWrapper) });
+                // This dynamic method converts, a InstanceWrapper struct to another struct using IL
+                // In order to work both struct must have the same layout, in this case
+                // both InstanceWrapper and a Proxy type will have always the same layout.
+                DynamicMethod converterMethod = new DynamicMethod(
+                    $"WrapperConverter<{typeof(TProxy).Name}>._converter",
+                    typeof(TProxy).MakeByRefType(),
+                    new[] { typeof(InstanceWrapper).MakeByRefType() });
                 ILGenerator il = converterMethod.GetILGenerator();
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ret);
-                _converter = (Func<InstanceWrapper, TProxy>)converterMethod.CreateDelegate(typeof(Func<InstanceWrapper, TProxy>));
+                _converter = (ConverterDelegate)converterMethod.CreateDelegate(typeof(ConverterDelegate));
             }
 
             public static TProxy CreateInstance(object instance)
             {
                 if (typeof(TProxy).IsValueType)
                 {
-                    return _converter(new InstanceWrapper(instance));
+                    InstanceWrapper wrapper = new InstanceWrapper(instance);
+                    return _converter(ref wrapper);
                 }
                 else
                 {

@@ -24,17 +24,11 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static readonly ConcurrentBag<DynamicMethod> DynamicMethods = new ConcurrentBag<DynamicMethod>();
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private static readonly ConcurrentDictionary<VTuple<string, TypeBuilder>, FieldInfo> DynamicFields = new ConcurrentDictionary<VTuple<string, TypeBuilder>, FieldInfo>();
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static readonly MethodInfo DuckTypeCreateMethodInfo = typeof(DuckType).GetMethod(nameof(DuckType.Create), BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(Type), typeof(object) }, null);
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static readonly PropertyInfo DuckTypeInstancePropertyInfo = typeof(IDuckType).GetProperty(nameof(IDuckType.Instance));
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private static readonly MethodInfo GetClassDuckTypeChainningValueMethodInfo = typeof(DuckType).GetMethod(nameof(GetClassDuckTypeChainningValue), BindingFlags.Static | BindingFlags.Public);
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private static readonly MethodInfo GetStructDuckTypeChainningValueMethodInfo = typeof(DuckType).GetMethod(nameof(GetStructDuckTypeChainningValue), BindingFlags.Static | BindingFlags.Public);
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private static readonly MethodInfo SetInnerDuckTypeMethodInfo = typeof(DuckType).GetMethod(nameof(SetInnerDuckType), BindingFlags.Static | BindingFlags.Public);
+        private static readonly MethodInfo GetDuckTypeChainningValueMethodInfo = typeof(DuckType).GetMethod(nameof(GetDuckTypeChainningValue), BindingFlags.Static | BindingFlags.Public);
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private static ModuleBuilder _moduleBuilder = null;

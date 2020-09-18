@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Datadog.Trace.ClrProfiler.DuckTyping;
 using Xunit;

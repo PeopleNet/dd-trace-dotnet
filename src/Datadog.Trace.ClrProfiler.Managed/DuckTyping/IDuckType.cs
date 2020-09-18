@@ -22,16 +22,4 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
         /// </summary>
         Version AssemblyVersion { get; }
     }
-
-    /// <summary>
-    /// Duck type class interface
-    /// </summary>
-    public interface IDuckTypeClass : IDuckType
-    {
-        /// <summary>
-        /// Sets the instance object
-        /// </summary>
-        /// <param name="instance">Object instance value</param>
-        void SetInstance(object instance);
-    }
 }
