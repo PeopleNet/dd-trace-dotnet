@@ -157,7 +157,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, instanceField);
-            if (!instanceType.IsPublic && !instanceType.IsNestedPublic)
+            /*if (!instanceType.IsPublic && !instanceType.IsNestedPublic)
             {
                 return;
             }
@@ -172,7 +172,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             else if (instanceType != typeof(object))
             {
                 il.Emit(OpCodes.Castclass, instanceType);
-            }
+            }*/
         }
 
         /// <summary>

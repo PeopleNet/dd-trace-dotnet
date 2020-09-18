@@ -88,13 +88,13 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     interfaceTypes);
 
                 // Create IDuckType and IDuckTypeSetter implementations
-                FieldInfo instanceField = CreateIDuckTypeImplementation(proxyTypeBuilder);
+                FieldInfo instanceField = CreateIDuckTypeImplementation(proxyTypeBuilder, targetType);
 
                 // Define .ctor
                 ConstructorBuilder ctorBuilder = proxyTypeBuilder.DefineConstructor(
                     MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
                     CallingConventions.Standard,
-                    TypeObjectArray);
+                    new[] { targetType });
                 ILGenerator ctorIL = ctorBuilder.GetILGenerator();
                 ctorIL.Emit(OpCodes.Ldarg_0);
                 ctorIL.Emit(OpCodes.Ldarg_1);
@@ -114,9 +114,14 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             }
         }
 
-        private static FieldInfo CreateIDuckTypeImplementation(TypeBuilder proxyTypeBuilder)
+        private static FieldInfo CreateIDuckTypeImplementation(TypeBuilder proxyTypeBuilder, Type targetType)
         {
-            var instanceField = proxyTypeBuilder.DefineField("_currentInstance", typeof(object), FieldAttributes.Private | FieldAttributes.InitOnly);
+            if (!targetType.IsPublic && !targetType.IsNestedPublic)
+            {
+                targetType = typeof(object);
+            }
+
+            var instanceField = proxyTypeBuilder.DefineField("_currentInstance", targetType, FieldAttributes.Private | FieldAttributes.InitOnly);
 
             var propInstance = proxyTypeBuilder.DefineProperty("Instance", PropertyAttributes.None, typeof(object), null);
             var getPropInstance = proxyTypeBuilder.DefineMethod(
@@ -127,6 +132,11 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             ILGenerator il = getPropInstance.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, instanceField);
+            if (targetType.IsValueType)
+            {
+                il.Emit(OpCodes.Box, targetType);
+            }
+
             il.Emit(OpCodes.Ret);
             propInstance.SetGetMethod(getPropInstance);
 
@@ -139,7 +149,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             il = getPropType.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, instanceField);
-            il.EmitCall(OpCodes.Callvirt, typeof(object).GetMethod("GetType"), null);
+            il.EmitCall(OpCodes.Callvirt, targetType.GetMethod("GetType"), null);
             il.Emit(OpCodes.Ret);
             propType.SetGetMethod(getPropType);
 
@@ -152,7 +162,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             il = getPropVersion.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, instanceField);
-            il.EmitCall(OpCodes.Call, typeof(object).GetMethod("GetType"), null);
+            il.EmitCall(OpCodes.Call, targetType.GetMethod("GetType"), null);
             il.EmitCall(OpCodes.Callvirt, typeof(Type).GetProperty("Assembly").GetMethod, null);
             il.EmitCall(OpCodes.Callvirt, typeof(Assembly).GetMethod("GetName", Type.EmptyTypes), null);
             il.EmitCall(OpCodes.Callvirt, typeof(AssemblyName).GetProperty("Version").GetMethod, null);

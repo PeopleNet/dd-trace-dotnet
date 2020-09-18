@@ -89,6 +89,9 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
                 // We call DuckType.GetStructDuckTypeChainningValue() with the 2 loaded values from the stack: field value, property type
                 il.EmitCall(OpCodes.Call, GetDuckTypeChainningValueMethodInfo, null);
+
+                // Convert the ducktype child to the actual property type
+                ILHelpers.TypeConversion(il, typeof(IDuckType), proxyProperty.PropertyType);
             }
             else if (returnType != proxyProperty.PropertyType)
             {
@@ -110,6 +113,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
             ILGenerator il = method.GetILGenerator();
             bool isPublicInstance = targetType.IsPublic || targetType.IsNestedPublic;
+            Type currentValueType = proxyProperty.PropertyType;
 
             // Load instance
             if (!targetField.IsStatic)
@@ -130,12 +134,14 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             // Check if the type can be converted of if we need to enable duck chaining
             if (proxyProperty.PropertyType != targetField.FieldType && !proxyProperty.PropertyType.IsValueType && !proxyProperty.PropertyType.IsAssignableFrom(targetField.FieldType))
             {
-                // Load the argument and cast it as Duck type
+                // Load the argument and convert it to Duck type
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Castclass, typeof(IDuckType));
+                ILHelpers.TypeConversion(il, proxyProperty.PropertyType, typeof(IDuckType));
 
                 // Call IDuckType.Instance property to get the actual value
                 il.EmitCall(OpCodes.Callvirt, DuckTypeInstancePropertyInfo.GetMethod, null);
+
+                currentValueType = typeof(object);
             }
             else
             {
@@ -147,7 +153,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             if (isPublicInstance && targetField.IsPublic)
             {
                 // If the instance and the field are public then is easy to set.
-                ILHelpers.TypeConversion(il, proxyProperty.PropertyType, targetField.FieldType);
+                ILHelpers.TypeConversion(il, currentValueType, targetField.FieldType);
 
                 il.Emit(targetField.IsStatic ? OpCodes.Stsfld : OpCodes.Stfld, targetField);
             }
@@ -159,7 +165,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
                 // Convert the field type for the dynamic method
                 Type dynValueType = targetField.FieldType.IsPublic || targetField.FieldType.IsNestedPublic ? targetField.FieldType : typeof(object);
-                ILHelpers.TypeConversion(il, proxyProperty.PropertyType, dynValueType);
+                ILHelpers.TypeConversion(il, currentValueType, dynValueType);
 
                 // Create dynamic method
                 Type[] dynParameters = targetField.IsStatic ? new[] { dynValueType } : new[] { typeof(object), dynValueType };
