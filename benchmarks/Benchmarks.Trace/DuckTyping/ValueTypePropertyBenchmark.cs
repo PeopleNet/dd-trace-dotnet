@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
 using Datadog.Trace.BenchmarkDotNet;
 using Datadog.Trace.ClrProfiler.DuckTyping;
 
@@ -10,39 +11,20 @@ namespace Benchmarks.Trace.DuckTyping
 {
     [DatadogExporter]
     [MemoryDiagnoser]
+    [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+    [CategoriesColumn]
     public class ValueTypePropertyBenchmark
     {
-        [ParamsSource(nameof(Proxies))]
-        public ProxyItem InstanceType { get; set; }
+        public static ObscureObject.IObscureObject BaseObject = (ObscureObject.IObscureObject)ObscureObject.GetPropertyPublicObject();
 
-        public readonly struct ProxyItem
+        public static IEnumerable<IObscureDuckType> Proxies()
         {
-            private readonly string _name;
-            public readonly IObscureDuckType Proxy;
-
-            public ProxyItem(string name, IObscureDuckType proxy)
+            return new IObscureDuckType[]
             {
-                _name = name;
-                Proxy = proxy;
-            }
-
-            public override string ToString()
-            {
-                return _name;
-            }
-        }
-
-        public static IEnumerable<ProxyItem> Proxies()
-        {
-            yield return new ProxyItem("Public", ObscureObject.GetPropertyPublicObject().As<IObscureDuckType>());
-            yield return new ProxyItem("Internal", ObscureObject.GetPropertyInternalObject().As<IObscureDuckType>());
-            yield return new ProxyItem("Private", ObscureObject.GetPropertyPrivateObject().As<IObscureDuckType>());
-        }
-
-        [Benchmark(Baseline = true)]
-        public IObscureDuckType GetProxy()
-        {
-            return InstanceType.Proxy;
+                ObscureObject.GetPropertyPublicObject().As<IObscureDuckType>(),
+                ObscureObject.GetPropertyInternalObject().As<IObscureDuckType>(),
+                ObscureObject.GetPropertyPrivateObject().As<IObscureDuckType>()
+            };
         }
 
         /**
@@ -50,27 +32,35 @@ namespace Benchmarks.Trace.DuckTyping
          */
 
         [Benchmark]
-        public int GetPublicStaticProperty()
+        [BenchmarkCategory("Static Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetPublicStaticProperty(IObscureDuckType proxy)
         {
-            return InstanceType.Proxy.PublicStaticGetSetValueType;
+            return proxy.PublicStaticGetSetValueType;
         }
 
         [Benchmark]
-        public int GetInternalStaticProperty()
+        [BenchmarkCategory("Static Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetInternalStaticProperty(IObscureDuckType proxy)
         {
-            return InstanceType.Proxy.InternalStaticGetSetValueType;
+            return proxy.InternalStaticGetSetValueType;
         }
 
         [Benchmark]
-        public int GetProtectedStaticProperty()
+        [BenchmarkCategory("Static Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetProtectedStaticProperty(IObscureDuckType proxy)
         {
-            return InstanceType.Proxy.ProtectedStaticGetSetValueType;
+            return proxy.ProtectedStaticGetSetValueType;
         }
 
         [Benchmark]
-        public int GetPrivateStaticProperty()
+        [BenchmarkCategory("Static Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetPrivateStaticProperty(IObscureDuckType proxy)
         {
-            return InstanceType.Proxy.PrivateStaticGetSetValueType;
+            return proxy.PrivateStaticGetSetValueType;
         }
 
 
@@ -79,27 +69,35 @@ namespace Benchmarks.Trace.DuckTyping
          */
 
         [Benchmark]
-        public void SetPublicStaticProperty()
+        [BenchmarkCategory("Static Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetPublicStaticProperty(IObscureDuckType proxy)
         {
-            InstanceType.Proxy.PublicStaticGetSetValueType = 42;
+            proxy.PublicStaticGetSetValueType = 42;
         }
 
         [Benchmark]
-        public void SetInternalStaticProperty()
+        [BenchmarkCategory("Static Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetInternalStaticProperty(IObscureDuckType proxy)
         {
-            InstanceType.Proxy.InternalStaticGetSetValueType = 42;
+            proxy.InternalStaticGetSetValueType = 42;
         }
 
         [Benchmark]
-        public void SetProtectedStaticProperty()
+        [BenchmarkCategory("Static Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetProtectedStaticProperty(IObscureDuckType proxy)
         {
-            InstanceType.Proxy.ProtectedStaticGetSetValueType = 42;
+            proxy.ProtectedStaticGetSetValueType = 42;
         }
 
         [Benchmark]
-        public void SetPrivateStaticProperty()
+        [BenchmarkCategory("Static Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetPrivateStaticProperty(IObscureDuckType proxy)
         {
-            InstanceType.Proxy.PrivateStaticGetSetValueType = 42;
+            proxy.PrivateStaticGetSetValueType = 42;
         }
 
 
@@ -108,27 +106,42 @@ namespace Benchmarks.Trace.DuckTyping
          */
 
         [Benchmark]
+        [BenchmarkCategory("Getter")]
         public int GetPublicProperty()
         {
-            return InstanceType.Proxy.PublicGetSetValueType;
+            return BaseObject.PublicGetSetValueType;
         }
 
         [Benchmark]
-        public int GetInternalProperty()
+        [BenchmarkCategory("Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetPublicProperty(IObscureDuckType proxy)
         {
-            return InstanceType.Proxy.InternalGetSetValueType;
+            return proxy.PublicGetSetValueType;
         }
 
         [Benchmark]
-        public int GetProtectedProperty()
+        [BenchmarkCategory("Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetInternalProperty(IObscureDuckType proxy)
         {
-            return InstanceType.Proxy.ProtectedGetSetValueType;
+            return proxy.InternalGetSetValueType;
         }
 
         [Benchmark]
-        public int GetPrivateProperty()
+        [BenchmarkCategory("Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetProtectedProperty(IObscureDuckType proxy)
         {
-            return InstanceType.Proxy.PrivateGetSetValueType;
+            return proxy.ProtectedGetSetValueType;
+        }
+
+        [Benchmark]
+        [BenchmarkCategory("Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetPrivateProperty(IObscureDuckType proxy)
+        {
+            return proxy.PrivateGetSetValueType;
         }
 
 
@@ -137,27 +150,42 @@ namespace Benchmarks.Trace.DuckTyping
          */
 
         [Benchmark]
+        [BenchmarkCategory("Setter")]
         public void SetPublicProperty()
         {
-            InstanceType.Proxy.PublicGetSetValueType = 42;
+            BaseObject.PublicGetSetValueType = 42;
         }
 
         [Benchmark]
-        public void SetInternalProperty()
+        [BenchmarkCategory("Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetPublicProperty(IObscureDuckType proxy)
         {
-            InstanceType.Proxy.InternalGetSetValueType = 42;
+            proxy.PublicGetSetValueType = 42;
         }
 
         [Benchmark]
-        public void SetProtectedProperty()
+        [BenchmarkCategory("Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetInternalProperty(IObscureDuckType proxy)
         {
-            InstanceType.Proxy.ProtectedGetSetValueType = 42;
+            proxy.InternalGetSetValueType = 42;
         }
 
         [Benchmark]
-        public void SetPrivateProperty()
+        [BenchmarkCategory("Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetProtectedProperty(IObscureDuckType proxy)
         {
-            InstanceType.Proxy.PrivateGetSetValueType = 42;
+            proxy.ProtectedGetSetValueType = 42;
+        }
+
+        [Benchmark]
+        [BenchmarkCategory("Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetPrivateProperty(IObscureDuckType proxy)
+        {
+            proxy.PrivateGetSetValueType = 42;
         }
 
 
@@ -166,15 +194,33 @@ namespace Benchmarks.Trace.DuckTyping
          */
 
         [Benchmark]
+        [BenchmarkCategory("Indexer Getter")]
         public int GetIndexerProperty()
         {
-            return InstanceType.Proxy[42];
+            return BaseObject[42];
         }
 
         [Benchmark]
+        [BenchmarkCategory("Indexer Getter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public int GetIndexerProperty(IObscureDuckType proxy)
+        {
+            return proxy[42];
+        }
+
+        [Benchmark]
+        [BenchmarkCategory("Indexer Setter")]
         public void SetIndexerProperty()
         {
-            InstanceType.Proxy[42] = 42;
+            BaseObject[42] = 42;
+        }
+
+        [Benchmark]
+        [BenchmarkCategory("Indexer Setter")]
+        [ArgumentsSource(nameof(Proxies))]
+        public void SetIndexerProperty(IObscureDuckType proxy)
+        {
+            proxy[42] = 42;
         }
 
         public interface IObscureDuckType
@@ -200,6 +246,8 @@ namespace Benchmarks.Trace.DuckTyping
             // *
 
             int this[int index] { get; set; }
+
+            string ToString();
         }
     }
 }

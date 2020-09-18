@@ -111,6 +111,8 @@ namespace Benchmarks.Trace.DuckTyping
             private static int? _privateStaticNullableIntField = null;
             public int? _publicNullableIntField = null;
             private int? _privateNullableIntField = null;
+
+            public override string ToString() => "Public";
         }
 
         internal class FieldInternalObject
@@ -185,6 +187,8 @@ namespace Benchmarks.Trace.DuckTyping
             private static int? _privateStaticNullableIntField = null;
             public int? _publicNullableIntField = null;
             private int? _privateNullableIntField = null;
+
+            public override string ToString() => "Internal";
         }
 
         private class FieldPrivateObject
@@ -259,11 +263,13 @@ namespace Benchmarks.Trace.DuckTyping
             private static int? _privateStaticNullableIntField = null;
             public int? _publicNullableIntField = null;
             private int? _privateNullableIntField = null;
+
+            public override string ToString() => "Private";
         }
 
         // ***
 
-        public class PropertyPublicObject
+        public class PropertyPublicObject : IObscureObject
         {
             private Dictionary<int, int> _dictioInt = new Dictionary<int, int> { [42] = 24 };
             private Dictionary<string, string> _dictioString = new Dictionary<string, string>();
@@ -411,6 +417,8 @@ namespace Benchmarks.Trace.DuckTyping
                 get => _dictioString[index];
                 set => _dictioString[index] = value;
             }
+
+            public override string ToString() => "Public";
         }
 
         internal class PropertyInternalObject
@@ -559,6 +567,8 @@ namespace Benchmarks.Trace.DuckTyping
                 get => _dictioString[index];
                 set => _dictioString[index] = value;
             }
+
+            public override string ToString() => "Internal";
         }
 
         private class PropertyPrivateObject
@@ -706,6 +716,21 @@ namespace Benchmarks.Trace.DuckTyping
                 get => _dictioString[index];
                 set => _dictioString[index] = value;
             }
+            public override string ToString() => "Private";
+        }
+
+
+        public interface IObscureObject
+        {
+            // *
+
+            int PublicGetSetValueType { get; set; }
+
+            // *
+
+            int this[int index] { get; set; }
+
+            string ToString();
         }
     }
 }

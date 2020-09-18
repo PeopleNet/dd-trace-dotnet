@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
 
 namespace Datadog.Trace.ClrProfiler.DuckTyping
 {
@@ -49,12 +50,14 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                 Type[] interfaceTypes;
                 if (proxyType.IsInterface)
                 {
+                    // If the proxy type definition is an interface we create an struct proxy
                     parentType = typeof(ValueType);
                     typeAttributes = TypeAttributes.Public | TypeAttributes.AnsiClass | TypeAttributes.BeforeFieldInit | TypeAttributes.SequentialLayout | TypeAttributes.Sealed | TypeAttributes.Serializable;
                     interfaceTypes = new[] { proxyType, typeof(IDuckType) };
                 }
                 else
                 {
+                    // If the proxy type definition is a class then we create a class proxy
                     parentType = proxyType;
                     typeAttributes = TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.BeforeFieldInit | TypeAttributes.AutoLayout | TypeAttributes.Sealed;
                     interfaceTypes = new[] { typeof(IDuckTypeClass) };
@@ -74,7 +77,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     }
                 }
 
-                string proxyTypeName = $"{proxyType.FullName}->{targetType.FullName}";
+                string proxyTypeName = $"{proxyType.FullName.Replace(".", "_").Replace("+", "__")}___{targetType.FullName.Replace(".", "_").Replace("+", "__")}";
                 Log.Information("Creating type proxy: " + proxyTypeName);
 
                 // Create Type
