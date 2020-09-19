@@ -48,7 +48,6 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             }
 
             CreateTypeResult result = GetOrCreateProxyType(proxyType, originalValue.GetType());
-            result.ExceptionInfo?.Throw();
             return (IDuckType)Activator.CreateInstance(result.ProxyType, originalValue);
         }
 

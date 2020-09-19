@@ -45,7 +45,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                 returnType = targetField.FieldType.IsPublic || targetField.FieldType.IsNestedPublic ? targetField.FieldType : typeof(object);
 
                 // We create the dynamic method
-                Type[] dynParameters = targetField.IsStatic ? Type.EmptyTypes : TypeObjectArray;
+                Type[] dynParameters = targetField.IsStatic ? Type.EmptyTypes : new[] { typeof(object) };
                 DynamicMethod dynMethod = new DynamicMethod(dynMethodName, returnType, dynParameters, typeof(DuckType).Module, true);
 
                 // We store the dynamic method in a bag to avoid getting collected by the GC.

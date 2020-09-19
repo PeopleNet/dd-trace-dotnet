@@ -247,29 +247,10 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                 duckAttrs.Add(new DuckAttribute());
             }
 
-            duckAttrs.Sort((x, y) =>
-            {
-                if (x.Version is null)
-                {
-                    return 1;
-                }
-
-                if (y.Version is null)
-                {
-                    return -1;
-                }
-
-                return x.Version.CompareTo(y.Version);
-            });
             var iMethodString = proxyMethod.ToString();
             MethodAttributesSelector[] allMethods = null!;
             foreach (var duckAttr in duckAttrs)
             {
-                if (!(duckAttr.Version is null) && asmVersion > duckAttr.Version)
-                {
-                    continue;
-                }
-
                 duckAttr.Name ??= proxyMethod.Name;
 
                 // We select the method to call

@@ -22,15 +22,13 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
     /// <summary>
     /// Duck attribute
     /// </summary>
-    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Method, AllowMultiple = true)]
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Method, AllowMultiple = false)]
     public class DuckAttribute : Attribute
     {
         /// <summary>
         /// All flags for static, non static, public and non public members
         /// </summary>
         public const BindingFlags AllFlags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-
-        private string _upToVersion;
 
         /// <summary>
         /// Gets or sets property Name
@@ -46,23 +44,5 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
         /// Gets or sets duck kind
         /// </summary>
         public DuckKind Kind { get; set; } = DuckKind.Property;
-
-        /// <summary>
-        /// Gets or sets up to assembly version
-        /// </summary>
-        public string UpToVersion
-        {
-            get => _upToVersion;
-            set
-            {
-                Version = string.IsNullOrWhiteSpace(value) ? null : new Version(value);
-                _upToVersion = value;
-            }
-        }
-
-        /// <summary>
-        /// Gets internal up to assembly version
-        /// </summary>
-        internal Version Version { get; private set; }
     }
 }

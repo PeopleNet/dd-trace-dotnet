@@ -89,7 +89,6 @@ namespace Datadog.Trace.ClrProfiler.CallTarget
                 if (hasInstanceContraint)
                 {
                     var result = DuckType.GetOrCreateProxyType(genericInstanceConstraints[0], typeof(TInstance));
-                    result.ExceptionInfo?.Throw();
                     callGenericTypes.Add(result.ProxyType);
                 }
                 else

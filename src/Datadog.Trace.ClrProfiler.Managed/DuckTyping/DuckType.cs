@@ -36,7 +36,6 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
             // Create Type
             CreateTypeResult result = GetOrCreateProxyType(proxyType, instance.GetType());
-            result.ExceptionInfo?.Throw();
 
             // Create instance
             return (IDuckType)Activator.CreateInstance(result.ProxyType, instance);
@@ -150,10 +149,10 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                 targetType = typeof(object);
             }
 
-            var instanceField = proxyTypeBuilder.DefineField("_currentInstance", targetType, FieldAttributes.Private | FieldAttributes.InitOnly);
+            FieldBuilder instanceField = proxyTypeBuilder.DefineField("_currentInstance", targetType, FieldAttributes.Private | FieldAttributes.InitOnly);
 
-            var propInstance = proxyTypeBuilder.DefineProperty("Instance", PropertyAttributes.None, typeof(object), null);
-            var getPropInstance = proxyTypeBuilder.DefineMethod(
+            PropertyBuilder propInstance = proxyTypeBuilder.DefineProperty("Instance", PropertyAttributes.None, typeof(object), null);
+            MethodBuilder getPropInstance = proxyTypeBuilder.DefineMethod(
                 "get_Instance",
                 MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
                 typeof(object),
@@ -169,8 +168,8 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             il.Emit(OpCodes.Ret);
             propInstance.SetGetMethod(getPropInstance);
 
-            var propType = proxyTypeBuilder.DefineProperty("Type", PropertyAttributes.None, typeof(Type), null);
-            var getPropType = proxyTypeBuilder.DefineMethod(
+            PropertyBuilder propType = proxyTypeBuilder.DefineProperty("Type", PropertyAttributes.None, typeof(Type), null);
+            MethodBuilder getPropType = proxyTypeBuilder.DefineMethod(
                 "get_Type",
                 MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
                 typeof(Type),
@@ -182,8 +181,8 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             il.Emit(OpCodes.Ret);
             propType.SetGetMethod(getPropType);
 
-            var propVersion = proxyTypeBuilder.DefineProperty("AssemblyVersion", PropertyAttributes.None, typeof(Version), null);
-            var getPropVersion = proxyTypeBuilder.DefineMethod(
+            PropertyBuilder propVersion = proxyTypeBuilder.DefineProperty("AssemblyVersion", PropertyAttributes.None, typeof(Version), null);
+            MethodBuilder getPropVersion = proxyTypeBuilder.DefineMethod(
                 "get_AssemblyVersion",
                 MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
                 typeof(Version),
@@ -203,16 +202,16 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
         private static List<PropertyInfo> GetProperties(Type proxyType)
         {
-            var selectedProperties = new List<PropertyInfo>(proxyType.IsInterface ? proxyType.GetProperties() : GetBaseProperties(proxyType));
-            var implementedInterfaces = proxyType.GetInterfaces();
-            foreach (var imInterface in implementedInterfaces)
+            List<PropertyInfo> selectedProperties = new List<PropertyInfo>(proxyType.IsInterface ? proxyType.GetProperties() : GetBaseProperties(proxyType));
+            Type[] implementedInterfaces = proxyType.GetInterfaces();
+            foreach (Type imInterface in implementedInterfaces)
             {
                 if (imInterface == typeof(IDuckType))
                 {
                     continue;
                 }
 
-                var newProps = imInterface.GetProperties().Where(p => selectedProperties.All(i => i.Name != p.Name));
+                IEnumerable<PropertyInfo> newProps = imInterface.GetProperties().Where(p => selectedProperties.All(i => i.Name != p.Name));
                 selectedProperties.AddRange(newProps);
             }
 
@@ -220,7 +219,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
             static IEnumerable<PropertyInfo> GetBaseProperties(Type baseType)
             {
-                foreach (var prop in baseType.GetProperties())
+                foreach (PropertyInfo prop in baseType.GetProperties())
                 {
                     if (prop.DeclaringType == typeof(DuckType))
                     {
@@ -241,11 +240,12 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
         private static void CreateProperties(TypeBuilder proxyTypeBuilder, Type proxyType, Type targetType, FieldInfo instanceField)
         {
-            var targetTypeAssemblyVersion = targetType.Assembly.GetName().Version;
-            // Gets all properties to be implemented
-            var proxyTypeProperties = GetProperties(proxyType);
+            Version targetTypeAssemblyVersion = targetType.Assembly.GetName().Version;
 
-            foreach (var proxyProperty in proxyTypeProperties)
+            // Gets all properties to be implemented
+            List<PropertyInfo> proxyTypeProperties = GetProperties(proxyType);
+
+            foreach (PropertyInfo proxyProperty in proxyTypeProperties)
             {
                 PropertyBuilder propertyBuilder = null;
 
@@ -255,121 +255,92 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     propertyBuilder = proxyTypeBuilder.DefineProperty(proxyProperty.Name, PropertyAttributes.None, proxyProperty.PropertyType, null);
                 }
 
-                var duckAttrs = new List<DuckAttribute>(proxyProperty.GetCustomAttributes<DuckAttribute>(true));
-                if (duckAttrs.Count == 0)
+                IEnumerable<DuckAttribute> duckAttributes = proxyProperty.GetCustomAttributes<DuckAttribute>(true);
+                DuckAttribute duckAttribute = duckAttributes.FirstOrDefault() ?? new DuckAttribute();
+                duckAttribute.Name ??= proxyProperty.Name;
+
+                switch (duckAttribute.Kind)
                 {
-                    duckAttrs.Add(new DuckAttribute());
-                }
+                    case DuckKind.Property:
+                        PropertyInfo targetProperty = null;
+                        try
+                        {
+                            targetProperty = targetType.GetProperty(duckAttribute.Name, duckAttribute.BindingFlags);
+                        }
+                        catch
+                        {
+                            targetProperty = targetType.GetProperty(duckAttribute.Name, proxyProperty.PropertyType, proxyProperty.GetIndexParameters().Select(i => i.ParameterType).ToArray());
+                        }
 
-                duckAttrs.Sort((x, y) =>
-                {
-                    if (x.Version is null)
-                    {
-                        return 1;
-                    }
-
-                    if (y.Version is null)
-                    {
-                        return -1;
-                    }
-
-                    return x.Version.CompareTo(y.Version);
-                });
-
-                foreach (var duckAttr in duckAttrs)
-                {
-                    if (!(duckAttr.Version is null) && targetTypeAssemblyVersion > duckAttr.Version)
-                    {
-                        continue;
-                    }
-
-                    duckAttr.Name ??= proxyProperty.Name;
-
-                    switch (duckAttr.Kind)
-                    {
-                        case DuckKind.Property:
-                            PropertyInfo targetProperty = null;
-                            try
-                            {
-                                targetProperty = targetType.GetProperty(duckAttr.Name, duckAttr.BindingFlags);
-                            }
-                            catch
-                            {
-                                targetProperty = targetType.GetProperty(duckAttr.Name, proxyProperty.PropertyType, proxyProperty.GetIndexParameters().Select(i => i.ParameterType).ToArray());
-                            }
-
-                            if (targetProperty is null)
-                            {
-                                continue;
-                            }
-
-                            propertyBuilder ??= proxyTypeBuilder.DefineProperty(proxyProperty.Name, PropertyAttributes.None, proxyProperty.PropertyType, null);
-
-                            if (proxyProperty.CanRead)
-                            {
-                                // Check if the target property can be read
-                                if (!targetProperty.CanRead)
-                                {
-                                    throw new DuckTypePropertyCantBeReadException(targetProperty);
-                                }
-
-                                propertyBuilder.SetGetMethod(GetPropertyGetMethod(proxyTypeBuilder, targetType, proxyProperty, targetProperty, instanceField));
-                            }
-
-                            if (proxyProperty.CanWrite)
-                            {
-                                // Check if the target property can be written
-                                if (!targetProperty.CanWrite)
-                                {
-                                    throw new DuckTypePropertyCantBeWrittenException(targetProperty);
-                                }
-
-                                // Check if the target property declaring type is an struct (structs modification is not supported)
-                                if (targetProperty.DeclaringType.IsValueType)
-                                {
-                                    throw new DuckTypeStructMembersCannotBeChangedException(targetProperty.DeclaringType);
-                                }
-
-                                propertyBuilder.SetSetMethod(GetPropertySetMethod(proxyTypeBuilder, targetType, proxyProperty, targetProperty, instanceField));
-                            }
-
+                        if (targetProperty is null)
+                        {
                             break;
+                        }
 
-                        case DuckKind.Field:
-                            FieldInfo targetField = targetType.GetField(duckAttr.Name, duckAttr.BindingFlags);
-                            if (targetField is null)
+                        propertyBuilder ??= proxyTypeBuilder.DefineProperty(proxyProperty.Name, PropertyAttributes.None, proxyProperty.PropertyType, null);
+
+                        if (proxyProperty.CanRead)
+                        {
+                            // Check if the target property can be read
+                            if (!targetProperty.CanRead)
                             {
-                                continue;
+                                throw new DuckTypePropertyCantBeReadException(targetProperty);
                             }
 
-                            propertyBuilder ??= proxyTypeBuilder.DefineProperty(proxyProperty.Name, PropertyAttributes.None, proxyProperty.PropertyType, null);
+                            propertyBuilder.SetGetMethod(GetPropertyGetMethod(proxyTypeBuilder, targetType, proxyProperty, targetProperty, instanceField));
+                        }
 
-                            if (proxyProperty.CanRead)
+                        if (proxyProperty.CanWrite)
+                        {
+                            // Check if the target property can be written
+                            if (!targetProperty.CanWrite)
                             {
-                                propertyBuilder.SetGetMethod(GetFieldGetMethod(proxyTypeBuilder, targetType, proxyProperty, targetField, instanceField));
+                                throw new DuckTypePropertyCantBeWrittenException(targetProperty);
                             }
 
-                            if (proxyProperty.CanWrite)
+                            // Check if the target property declaring type is an struct (structs modification is not supported)
+                            if (targetProperty.DeclaringType.IsValueType)
                             {
-                                // Check if the target field is marked as InitOnly (readonly) and throw an exception in that case
-                                if ((targetField.Attributes & FieldAttributes.InitOnly) != 0)
-                                {
-                                    throw new DuckTypeFieldIsReadonlyException(targetField);
-                                }
-
-                                // Check if the target field declaring type is an struct (structs modification is not supported)
-                                if (targetField.DeclaringType.IsValueType)
-                                {
-                                    throw new DuckTypeStructMembersCannotBeChangedException(targetField.DeclaringType);
-                                }
-
-                                propertyBuilder.SetSetMethod(GetFieldSetMethod(proxyTypeBuilder, targetType, proxyProperty, targetField, instanceField));
+                                throw new DuckTypeStructMembersCannotBeChangedException(targetProperty.DeclaringType);
                             }
 
+                            propertyBuilder.SetSetMethod(GetPropertySetMethod(proxyTypeBuilder, targetType, proxyProperty, targetProperty, instanceField));
+                        }
+
+                        break;
+
+                    case DuckKind.Field:
+                        FieldInfo targetField = targetType.GetField(duckAttribute.Name, duckAttribute.BindingFlags);
+                        if (targetField is null)
+                        {
                             break;
-                    }
+                        }
 
-                    break;
+                        propertyBuilder ??= proxyTypeBuilder.DefineProperty(proxyProperty.Name, PropertyAttributes.None, proxyProperty.PropertyType, null);
+
+                        if (proxyProperty.CanRead)
+                        {
+                            propertyBuilder.SetGetMethod(GetFieldGetMethod(proxyTypeBuilder, targetType, proxyProperty, targetField, instanceField));
+                        }
+
+                        if (proxyProperty.CanWrite)
+                        {
+                            // Check if the target field is marked as InitOnly (readonly) and throw an exception in that case
+                            if ((targetField.Attributes & FieldAttributes.InitOnly) != 0)
+                            {
+                                throw new DuckTypeFieldIsReadonlyException(targetField);
+                            }
+
+                            // Check if the target field declaring type is an struct (structs modification is not supported)
+                            if (targetField.DeclaringType.IsValueType)
+                            {
+                                throw new DuckTypeStructMembersCannotBeChangedException(targetField.DeclaringType);
+                            }
+
+                            propertyBuilder.SetSetMethod(GetFieldSetMethod(proxyTypeBuilder, targetType, proxyProperty, targetField, instanceField));
+                        }
+
+                        break;
                 }
 
                 if (propertyBuilder is null)
@@ -391,15 +362,24 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
         internal readonly struct CreateTypeResult
         {
-            public readonly Type ProxyType;
-            public readonly ExceptionDispatchInfo ExceptionInfo;
+            private readonly Type _proxyType;
+            private readonly ExceptionDispatchInfo _exceptionInfo;
             public readonly bool Success;
 
             public CreateTypeResult(Type proxyType, ExceptionDispatchInfo exceptionInfo)
             {
-                ProxyType = proxyType;
-                ExceptionInfo = exceptionInfo;
+                _proxyType = proxyType;
+                _exceptionInfo = exceptionInfo;
                 Success = proxyType != null && exceptionInfo == null;
+            }
+
+            public Type ProxyType
+            {
+                get
+                {
+                    _exceptionInfo?.Throw();
+                    return _proxyType;
+                }
             }
         }
     }
