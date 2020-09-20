@@ -22,7 +22,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     continue;
                 }
 
-                var newMethods = imInterface.GetMethods()
+                IEnumerable<MethodInfo> newMethods = imInterface.GetMethods()
                     .Where(iMethod =>
                     {
                         if (iMethod.IsSpecialName)
@@ -39,7 +39,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             return selectedMethods;
             static IEnumerable<MethodInfo> GetBaseMethods(Type baseType)
             {
-                foreach (var method in baseType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                foreach (MethodInfo method in baseType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                 {
                     if (method.IsSpecialName || method.IsFinal || method.IsPrivate)
                     {
@@ -91,7 +91,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                 }
 
                 // Create the proxy method implementation parameters
-                for (var j = 0; j < proxyMethodDefinitionParameters.Length; j++)
+                for (int j = 0; j < proxyMethodDefinitionParameters.Length; j++)
                 {
                     ParameterInfo pmDefParameter = proxyMethodDefinitionParameters[j];
                     ParameterBuilder pmImpParameter = proxyMethod.DefineParameter(j, pmDefParameter.Attributes, pmDefParameter.Name);
@@ -103,22 +103,16 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     proxyMethodParametersBuilders[j] = pmImpParameter;
                 }
 
-                var il = proxyMethod.GetILGenerator();
-                var publicInstance = targetType.IsPublic || targetType.IsNestedPublic;
-                var innerDuck = false;
-                var iMethodReturnType = proxyMethodDefinition.ReturnType;
-                if (iMethodReturnType.IsGenericType)
-                {
-                    iMethodReturnType = iMethodReturnType.GetGenericTypeDefinition();
-                }
-
+                ILGenerator il = proxyMethod.GetILGenerator();
+                bool publicInstance = targetType.IsPublic || targetType.IsNestedPublic;
+                bool duckChaining = false;
                 if (proxyMethodDefinition.ReturnType != targetMethod.ReturnType &&
                     !proxyMethodDefinition.ReturnType.IsValueType && !proxyMethodDefinition.ReturnType.IsAssignableFrom(targetMethod.ReturnType) &&
                     !proxyMethodDefinition.ReturnType.IsGenericParameter && !targetMethod.ReturnType.IsGenericParameter)
                 {
                     il.Emit(OpCodes.Ldtoken, proxyMethodDefinition.ReturnType);
                     il.EmitCall(OpCodes.Call, Util.GetTypeFromHandleMethodInfo, null);
-                    innerDuck = true;
+                    duckChaining = true;
                 }
 
                 // Create generic method call
@@ -137,14 +131,14 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     }
 
                     // Load arguments
-                    var parameters = targetMethod.GetParameters();
-                    var minParametersLength = Math.Min(parameters.Length, proxyMethodDefinitionParameters.Length);
-                    for (var i = 0; i < minParametersLength; i++)
+                    ParameterInfo[] parameters = targetMethod.GetParameters();
+                    int minParametersLength = Math.Min(parameters.Length, proxyMethodDefinitionParameters.Length);
+                    for (int i = 0; i < minParametersLength; i++)
                     {
                         // Load value
                         ILHelpers.WriteLoadArgument(i, il, proxyMethodDefinition.IsStatic);
-                        var iPType = Util.GetRootType(proxyMethodDefinitionParameters[i].ParameterType);
-                        var pType = Util.GetRootType(parameters[i].ParameterType);
+                        Type iPType = Util.GetRootType(proxyMethodDefinitionParameters[i].ParameterType);
+                        Type pType = Util.GetRootType(parameters[i].ParameterType);
                         ILHelpers.TypeConversion(il, iPType, pType);
                     }
 
@@ -168,7 +162,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     // Covert return value
                     if (targetMethod.ReturnType != typeof(void))
                     {
-                        if (innerDuck)
+                        if (duckChaining)
                         {
                             ILHelpers.TypeConversion(il, targetMethod.ReturnType, typeof(object));
                             il.EmitCall(OpCodes.Call, DuckTypeCreateMethodInfo, null);
@@ -192,35 +186,34 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     }
 
                     // Load arguments
-                    var parameters = targetMethod.GetParameters();
-                    var minParametersLength = Math.Min(parameters.Length, proxyMethodDefinitionParameters.Length);
+                    ParameterInfo[] parameters = targetMethod.GetParameters();
+                    int minParametersLength = Math.Min(parameters.Length, proxyMethodDefinitionParameters.Length);
                     ILHelpers.WriteIlIntValue(il, minParametersLength);
                     il.Emit(OpCodes.Newarr, typeof(object));
-                    for (var i = 0; i < minParametersLength; i++)
+                    for (int i = 0; i < minParametersLength; i++)
                     {
                         // Load value
                         il.Emit(OpCodes.Dup);
                         ILHelpers.WriteIlIntValue(il, i);
                         ILHelpers.WriteLoadArgument(i, il, proxyMethodDefinition.IsStatic);
-                        var iPType = Util.GetRootType(proxyMethodDefinitionParameters[i].ParameterType);
+                        Type iPType = Util.GetRootType(proxyMethodDefinitionParameters[i].ParameterType);
                         ILHelpers.TypeConversion(il, iPType, typeof(object));
                         il.Emit(OpCodes.Stelem_Ref);
                     }
 
-                    var dynParameters = new[] { typeof(object), typeof(object[]) };
-                    var dynMethod = new DynamicMethod("callDyn_" + targetMethod.Name, typeof(object), dynParameters, typeof(DuckType).Module, true);
+                    Type[] dynParameters = new[] { typeof(object), typeof(object[]) };
+                    DynamicMethod dynMethod = new DynamicMethod("callDyn_" + targetMethod.Name, typeof(object), dynParameters, typeof(DuckType).Module, true);
+                    DynamicMethods.Add(dynMethod);
                     CreateMethodAccessor(dynMethod.GetILGenerator(), targetMethod, false);
-                    var handle = GetRuntimeHandle(dynMethod);
 
-                    il.Emit(OpCodes.Ldc_I8, (long)handle.GetFunctionPointer());
+                    il.Emit(OpCodes.Ldc_I8, (long)GetRuntimeHandle(dynMethod).GetFunctionPointer());
                     il.Emit(OpCodes.Conv_I);
                     il.EmitCalli(OpCodes.Calli, dynMethod.CallingConvention, dynMethod.ReturnType, dynParameters, null);
-                    DynamicMethods.Add(dynMethod);
 
                     // Convert return value
                     if (targetMethod.ReturnType != typeof(void))
                     {
-                        if (innerDuck)
+                        if (duckChaining)
                         {
                             il.EmitCall(OpCodes.Call, DuckTypeCreateMethodInfo, null);
                         }
@@ -241,31 +234,31 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
         private static MethodInfo SelectTargetMethod(Type targetType, MethodInfo proxyMethod, ParameterInfo[] parameters, Type[] parametersTypes)
         {
-            var asmVersion = targetType.Assembly.GetName().Version;
-            var duckAttrs = proxyMethod.GetCustomAttributes<DuckAttribute>(true).ToList();
+            Version asmVersion = targetType.Assembly.GetName().Version;
+            List<DuckAttribute> duckAttrs = proxyMethod.GetCustomAttributes<DuckAttribute>(true).ToList();
             if (duckAttrs.Count == 0)
             {
                 duckAttrs.Add(new DuckAttribute());
             }
 
-            var iMethodString = proxyMethod.ToString();
+            string iMethodString = proxyMethod.ToString();
             MethodAttributesSelector[] allMethods = null!;
-            foreach (var duckAttr in duckAttrs)
+            foreach (DuckAttribute duckAttr in duckAttrs)
             {
                 duckAttr.Name ??= proxyMethod.Name;
 
                 // We select the method to call
-                var method = targetType.GetMethod(duckAttr.Name, duckAttr.BindingFlags, null, parametersTypes, null);
+                MethodInfo method = targetType.GetMethod(duckAttr.Name, duckAttr.BindingFlags, null, parametersTypes, null);
 
                 if (!(method is null))
                 {
-                    var attrs = method.GetCustomAttributes<DuckAttribute>().ToList();
+                    List<DuckAttribute> attrs = method.GetCustomAttributes<DuckAttribute>().ToList();
                     if (attrs.Count == 0)
                     {
                         return method;
                     }
 
-                    foreach (var attribute in attrs)
+                    foreach (DuckAttribute attribute in attrs)
                     {
                         if (attribute.Name == iMethodString)
                         {
@@ -276,9 +269,9 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
                 if (allMethods is null)
                 {
-                    var methods = targetType.GetMethods(duckAttr.BindingFlags);
+                    MethodInfo[] methods = targetType.GetMethods(duckAttr.BindingFlags);
                     allMethods = new MethodAttributesSelector[methods.Length];
-                    for (var i = 0; i < allMethods.Length; i++)
+                    for (int i = 0; i < allMethods.Length; i++)
                     {
                         allMethods[i] = new MethodAttributesSelector(
                             methods[i],
@@ -286,7 +279,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     }
                 }
 
-                var remaining = allMethods.Where(ma =>
+                List<MethodAttributesSelector> remaining = allMethods.Where(ma =>
                 {
                     if (ma.Attributes.Count == 0)
                     {
@@ -296,15 +289,15 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                         }
 
                         // Trying to select the ones with the same parameters count
-                        var mParams = ma.Method.GetParameters();
+                        ParameterInfo[] mParams = ma.Method.GetParameters();
                         if (mParams.Length == parameters.Length)
                         {
                             return true;
                         }
 
-                        var min = Math.Min(mParams.Length, parameters.Length);
-                        var max = Math.Max(mParams.Length, parameters.Length);
-                        for (var i = min; i < max; i++)
+                        int min = Math.Min(mParams.Length, parameters.Length);
+                        int max = Math.Max(mParams.Length, parameters.Length);
+                        for (int i = min; i < max; i++)
                         {
                             if (mParams.Length > i && !mParams[i].HasDefaultValue)
                             {
@@ -320,7 +313,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     }
 
                     // Trying to select the one with the same name (used by reverse proxy)
-                    foreach (var attribute in ma.Attributes)
+                    foreach (DuckAttribute attribute in ma.Attributes)
                     {
                         if (attribute.Name == iMethodString)
                         {
@@ -340,14 +333,14 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     return remaining[0].Method;
                 }
 
-                var remainWithAttribute = remaining.FirstOrDefault(r => r.Attributes.Count > 0);
+                MethodAttributesSelector remainWithAttribute = remaining.FirstOrDefault(r => r.Attributes.Count > 0);
                 if (!(remainWithAttribute.Method is null))
                 {
                     return remainWithAttribute.Method;
                 }
 
                 // Trying to select the ones with the same return type
-                var sameReturnType = remaining.Where(ma => ma.Method.ReturnType == proxyMethod.ReturnType).ToList();
+                List<MethodAttributesSelector> sameReturnType = remaining.Where(ma => ma.Method.ReturnType == proxyMethod.ReturnType).ToList();
                 if (sameReturnType.Count == 1)
                 {
                     return sameReturnType[0].Method;
@@ -360,7 +353,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
                 if (proxyMethod.ReturnType.IsInterface && proxyMethod.ReturnType.GetInterface(proxyMethod.ReturnType.FullName) == null)
                 {
-                    var duckReturnType = remaining.Where(ma => !ma.Method.ReturnType.IsValueType).ToList();
+                    List<MethodAttributesSelector> duckReturnType = remaining.Where(ma => !ma.Method.ReturnType.IsValueType).ToList();
                     if (duckReturnType.Count == 1)
                     {
                         return duckReturnType[0].Method;
@@ -373,14 +366,14 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                 }
 
                 // Trying to select the one with the same parameters types
-                var sameParameters = remaining.Where(m =>
+                List<MethodAttributesSelector> sameParameters = remaining.Where(m =>
                 {
-                    var mParams = m.Method.GetParameters();
-                    var min = Math.Min(mParams.Length, parameters.Length);
-                    for (var i = 0; i < min; i++)
+                    ParameterInfo[] mParams = m.Method.GetParameters();
+                    int min = Math.Min(mParams.Length, parameters.Length);
+                    for (int i = 0; i < min; i++)
                     {
-                        var expectedType = mParams[i].ParameterType;
-                        var actualType = parameters[i].ParameterType;
+                        Type expectedType = mParams[i].ParameterType;
+                        Type actualType = parameters[i].ParameterType;
 
                         if (expectedType == actualType)
                         {
@@ -437,12 +430,12 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             }
 
             // Prepare arguments
-            var parameters = method.GetParameters();
-            for (var i = 0; i < parameters.Length; i++)
+            ParameterInfo[] parameters = method.GetParameters();
+            for (int i = 0; i < parameters.Length; i++)
             {
-                var pType = parameters[i].ParameterType;
-                var rType = Util.GetRootType(pType);
-                var callEnum = false;
+                Type pType = parameters[i].ParameterType;
+                Type rType = Util.GetRootType(pType);
+                bool callEnum = false;
                 if (rType.IsEnum)
                 {
                     il.Emit(OpCodes.Ldtoken, rType);
