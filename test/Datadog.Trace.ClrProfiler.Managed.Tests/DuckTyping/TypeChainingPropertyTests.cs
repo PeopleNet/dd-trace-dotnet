@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 using Datadog.Trace.ClrProfiler.DuckTyping;
 using Xunit;
-using static Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping.DuckTypeSelfTypeFieldTests;
+using static Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping.TypeChainingFieldTests;
 
 #pragma warning disable SA1201 // Elements must appear in the correct order
 
 namespace Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping
 {
-    public class DuckTypeSelfTypePropertyTests
+    public class TypeChainingPropertyTests
     {
         public static IEnumerable<object[]> Data()
         {

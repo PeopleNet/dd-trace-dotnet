@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Datadog.Trace.ClrProfiler.DuckTyping;
 
+#pragma warning disable SA1201 // Elements must appear in the correct order
 #pragma warning disable SA1202 // Elements must be ordered by access
 #pragma warning disable SA1401 // Fields must be private
 #pragma warning disable IDE0051 // Remove unused private members
@@ -33,6 +35,13 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping
         public static object GetPropertyInternalObject() => propertyInternalObject;
 
         public static object GetPropertyPrivateObject() => propertyPrivateObject;
+
+        // ***
+        public enum TestEnum
+        {
+            First,
+            Second
+        }
 
         // ***
 
@@ -417,6 +426,45 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping
                 get => _dictioString[index];
                 set => _dictioString[index] = value;
             }
+
+            // ***
+
+            public TaskStatus Status { get; set; } = TaskStatus.RanToCompletion;
+
+            // *** Methods
+            public int Sum(int a, int b) => a + b;
+
+            public float Sum(float a, float b) => a + b;
+
+            public double Sum(double a, double b) => a + b;
+
+            public short Sum(short a, short b) => (short)(a + b);
+
+            private int InternalSum(int a, int b) => a + b;
+
+            public TestEnum ShowEnum(TestEnum val)
+            {
+                return val;
+            }
+
+            public T GetDefault<T>() => default;
+
+            public void Add(DummyFieldObject obj)
+            {
+            }
+
+            [Duck(Name = "Void Add(System.String, System.Object)")]
+            public void Add(string name, DummyFieldObject obj)
+            {
+            }
+
+            public void Add(string name, int obj)
+            {
+            }
+
+            public void Add(string name, string obj = "none")
+            {
+            }
         }
 
         internal class PropertyInternalObject
@@ -565,6 +613,45 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping
                 get => _dictioString[index];
                 set => _dictioString[index] = value;
             }
+
+            // ***
+
+            public TaskStatus Status { get; set; } = TaskStatus.RanToCompletion;
+
+            // *** Methods
+            public int Sum(int a, int b) => a + b;
+
+            public float Sum(float a, float b) => a + b;
+
+            public double Sum(double a, double b) => a + b;
+
+            public short Sum(short a, short b) => (short)(a + b);
+
+            private int InternalSum(int a, int b) => a + b;
+
+            public TestEnum ShowEnum(TestEnum val)
+            {
+                return val;
+            }
+
+            public T GetDefault<T>() => default;
+
+            public void Add(DummyFieldObject obj)
+            {
+            }
+
+            [Duck(Name = "Void Add(System.String, System.Object)")]
+            public void Add(string name, DummyFieldObject obj)
+            {
+            }
+
+            public void Add(string name, int obj)
+            {
+            }
+
+            public void Add(string name, string obj = "none")
+            {
+            }
         }
 
         private class PropertyPrivateObject
@@ -711,6 +798,45 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping
             {
                 get => _dictioString[index];
                 set => _dictioString[index] = value;
+            }
+
+            // ***
+
+            public TaskStatus Status { get; set; } = TaskStatus.RanToCompletion;
+
+            // *** Methods
+            public int Sum(int a, int b) => a + b;
+
+            public float Sum(float a, float b) => a + b;
+
+            public double Sum(double a, double b) => a + b;
+
+            public short Sum(short a, short b) => (short)(a + b);
+
+            private int InternalSum(int a, int b) => a + b;
+
+            public TestEnum ShowEnum(TestEnum val)
+            {
+                return val;
+            }
+
+            public T GetDefault<T>() => default;
+
+            public void Add(DummyFieldObject obj)
+            {
+            }
+
+            [Duck(Name = "Void Add(System.String, System.Object)")]
+            public void Add(string name, DummyFieldObject obj)
+            {
+            }
+
+            public void Add(string name, int obj)
+            {
+            }
+
+            public void Add(string name, string obj = "none")
+            {
             }
         }
     }

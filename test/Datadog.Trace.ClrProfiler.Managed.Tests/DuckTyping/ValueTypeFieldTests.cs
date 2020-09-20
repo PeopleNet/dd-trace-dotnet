@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Datadog.Trace.ClrProfiler.Managed.Tests.DuckTyping
 {
-    public class DuckTypeValueTypeFieldTests
+    public class ValueTypeFieldTests
     {
         public static IEnumerable<object[]> Data()
         {
