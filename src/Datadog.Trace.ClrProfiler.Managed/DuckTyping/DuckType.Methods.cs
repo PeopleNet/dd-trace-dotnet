@@ -232,183 +232,154 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             }
         }
 
-        private static MethodInfo SelectTargetMethod(Type targetType, MethodInfo proxyMethod, ParameterInfo[] parameters, Type[] parametersTypes)
+        private static MethodInfo SelectTargetMethod(Type targetType, MethodInfo proxyMethod, ParameterInfo[] proxyMethodParameters, Type[] proxyMethodParametersTypes)
         {
-            Version asmVersion = targetType.Assembly.GetName().Version;
-            List<DuckAttribute> duckAttrs = proxyMethod.GetCustomAttributes<DuckAttribute>(true).ToList();
-            if (duckAttrs.Count == 0)
+            DuckAttribute proxyMethodDuckAttribute = proxyMethod.GetCustomAttributes<DuckAttribute>(true).FirstOrDefault() ?? new DuckAttribute();
+            proxyMethodDuckAttribute.Name ??= proxyMethod.Name;
+            string proxyMethodString = proxyMethod.ToString();
+
+            // We select the method to call
+            MethodInfo targetMethod = targetType.GetMethod(proxyMethodDuckAttribute.Name, proxyMethodDuckAttribute.BindingFlags, null, proxyMethodParametersTypes, null);
+
+            if (!(targetMethod is null))
             {
-                duckAttrs.Add(new DuckAttribute());
+                // We check if the target method has a duck attribute (Used by a reverse proxy scenario)
+                DuckAttribute targetMethodDuckAttribute = targetMethod.GetCustomAttributes<DuckAttribute>().FirstOrDefault();
+                if (targetMethodDuckAttribute is null || targetMethodDuckAttribute.Name == proxyMethodString)
+                {
+                    return targetMethod;
+                }
             }
 
-            string iMethodString = proxyMethod.ToString();
-            MethodAttributesSelector[] allMethods = null!;
-            foreach (DuckAttribute duckAttr in duckAttrs)
+            // If the method wasn't found (DuckTyped parameter or return value) we try to find a similar that will work.
+            MethodInfo[] allTargetMethods = targetType.GetMethods(proxyMethodDuckAttribute.BindingFlags);
+            List<MethodInfo> preselectedTargetMethods = allTargetMethods.Where(method =>
             {
-                duckAttr.Name ??= proxyMethod.Name;
-
-                // We select the method to call
-                MethodInfo method = targetType.GetMethod(duckAttr.Name, duckAttr.BindingFlags, null, parametersTypes, null);
-
-                if (!(method is null))
+                // Check if the target method contains a DuckAttribute to match the proxy method (reverse proxy scenario)
+                DuckAttribute methodDuckAttribute = method.GetCustomAttributes<DuckAttribute>(true).FirstOrDefault();
+                if (methodDuckAttribute != null)
                 {
-                    List<DuckAttribute> attrs = method.GetCustomAttributes<DuckAttribute>().ToList();
-                    if (attrs.Count == 0)
-                    {
-                        return method;
-                    }
-
-                    foreach (DuckAttribute attribute in attrs)
-                    {
-                        if (attribute.Name == iMethodString)
-                        {
-                            return method;
-                        }
-                    }
+                    return methodDuckAttribute.Name == proxyMethodString;
                 }
 
-                if (allMethods is null)
+                // We omit target methods with different names.
+                if (method.Name != proxyMethodDuckAttribute.Name)
                 {
-                    MethodInfo[] methods = targetType.GetMethods(duckAttr.BindingFlags);
-                    allMethods = new MethodAttributesSelector[methods.Length];
-                    for (int i = 0; i < allMethods.Length; i++)
-                    {
-                        allMethods[i] = new MethodAttributesSelector(
-                            methods[i],
-                            new List<DuckAttribute>(methods[i].GetCustomAttributes<DuckAttribute>(true)));
-                    }
-                }
-
-                List<MethodAttributesSelector> remaining = allMethods.Where(ma =>
-                {
-                    if (ma.Attributes.Count == 0)
-                    {
-                        if (ma.Method.Name != duckAttr.Name)
-                        {
-                            return false;
-                        }
-
-                        // Trying to select the ones with the same parameters count
-                        ParameterInfo[] mParams = ma.Method.GetParameters();
-                        if (mParams.Length == parameters.Length)
-                        {
-                            return true;
-                        }
-
-                        int min = Math.Min(mParams.Length, parameters.Length);
-                        int max = Math.Max(mParams.Length, parameters.Length);
-                        for (int i = min; i < max; i++)
-                        {
-                            if (mParams.Length > i && !mParams[i].HasDefaultValue)
-                            {
-                                return false;
-                            }
-
-                            if (parameters.Length > i && !parameters[i].HasDefaultValue)
-                            {
-                                return false;
-                            }
-                        }
-                        return true;
-                    }
-
-                    // Trying to select the one with the same name (used by reverse proxy)
-                    foreach (DuckAttribute attribute in ma.Attributes)
-                    {
-                        if (attribute.Name == iMethodString)
-                        {
-                            return true;
-                        }
-                    }
                     return false;
-                }).ToList();
-
-                if (remaining.Count == 0)
-                {
-                    continue;
                 }
 
-                if (remaining.Count == 1)
+                // We pre-select the ones with the same parameters count
+                ParameterInfo[] methodParametersInfo = method.GetParameters();
+                if (methodParametersInfo.Length == proxyMethodParameters.Length)
                 {
-                    return remaining[0].Method;
+                    return true;
                 }
 
-                MethodAttributesSelector remainWithAttribute = remaining.FirstOrDefault(r => r.Attributes.Count > 0);
-                if (!(remainWithAttribute.Method is null))
+                // We pre-select the ones with differents parameters count but with default values to
+                // fulfill the missing parameters count.
+                int minCount = Math.Min(methodParametersInfo.Length, proxyMethodParameters.Length);
+                int maxCount = Math.Max(methodParametersInfo.Length, proxyMethodParameters.Length);
+                for (int i = minCount; i < maxCount; i++)
                 {
-                    return remainWithAttribute.Method;
-                }
-
-                // Trying to select the ones with the same return type
-                List<MethodAttributesSelector> sameReturnType = remaining.Where(ma => ma.Method.ReturnType == proxyMethod.ReturnType).ToList();
-                if (sameReturnType.Count == 1)
-                {
-                    return sameReturnType[0].Method;
-                }
-
-                if (sameReturnType.Count > 1)
-                {
-                    remaining = sameReturnType;
-                }
-
-                if (proxyMethod.ReturnType.IsInterface && proxyMethod.ReturnType.GetInterface(proxyMethod.ReturnType.FullName) == null)
-                {
-                    List<MethodAttributesSelector> duckReturnType = remaining.Where(ma => !ma.Method.ReturnType.IsValueType).ToList();
-                    if (duckReturnType.Count == 1)
+                    if (methodParametersInfo.Length > i && !methodParametersInfo[i].HasDefaultValue)
                     {
-                        return duckReturnType[0].Method;
-                    }
-
-                    if (duckReturnType.Count > 1)
-                    {
-                        remaining = duckReturnType;
-                    }
-                }
-
-                // Trying to select the one with the same parameters types
-                List<MethodAttributesSelector> sameParameters = remaining.Where(m =>
-                {
-                    ParameterInfo[] mParams = m.Method.GetParameters();
-                    int min = Math.Min(mParams.Length, parameters.Length);
-                    for (int i = 0; i < min; i++)
-                    {
-                        Type expectedType = mParams[i].ParameterType;
-                        Type actualType = parameters[i].ParameterType;
-
-                        if (expectedType == actualType)
-                        {
-                            continue;
-                        }
-
-                        if (expectedType.IsAssignableFrom(actualType))
-                        {
-                            continue;
-                        }
-
-                        if (!expectedType.IsValueType && actualType == typeof(object))
-                        {
-                            continue;
-                        }
-
-                        if (expectedType.IsValueType && actualType.IsValueType)
-                        {
-                            continue;
-                        }
-
                         return false;
                     }
-                    return true;
-                }).ToList();
 
-                if (sameParameters.Count == 1)
-                {
-                    return sameParameters[0].Method;
+                    if (proxyMethodParameters.Length > i && !proxyMethodParameters[i].HasDefaultValue)
+                    {
+                        return false;
+                    }
                 }
+                return true;
+            }).ToList();
 
-                return remaining[0].Method;
+            // If there are not preselected target methods we bailout.
+            if (preselectedTargetMethods.Count == 0)
+            {
+                return null;
             }
 
-            return null;
+            // If there's only one target method we return it.
+            if (preselectedTargetMethods.Count == 1)
+            {
+                return preselectedTargetMethods[0];
+            }
+
+            // If there is at least one preselected with a Duck attribute (reverse proxy) we return that one.
+            MethodInfo preselectedWithDuckAttribute = preselectedTargetMethods.FirstOrDefault(m => m.GetCustomAttributes<DuckAttribute>().Any());
+            if (preselectedWithDuckAttribute != null)
+            {
+                return preselectedWithDuckAttribute;
+            }
+
+            // Trying to select the ones with the same return type
+            List<MethodInfo> sameReturnType = preselectedTargetMethods.Where(method => method.ReturnType == proxyMethod.ReturnType).ToList();
+            if (sameReturnType.Count == 1)
+            {
+                return sameReturnType[0];
+            }
+
+            if (sameReturnType.Count > 1)
+            {
+                preselectedTargetMethods = sameReturnType;
+            }
+
+            if (proxyMethod.ReturnType.IsInterface && proxyMethod.ReturnType.GetInterface(proxyMethod.ReturnType.FullName) == null)
+            {
+                List<MethodInfo> duckReturnType = preselectedTargetMethods.Where(method => !method.ReturnType.IsValueType).ToList();
+                if (duckReturnType.Count == 1)
+                {
+                    return duckReturnType[0];
+                }
+
+                if (duckReturnType.Count > 1)
+                {
+                    preselectedTargetMethods = duckReturnType;
+                }
+            }
+
+            // Trying to select the one with the same parameters types
+            List<MethodInfo> sameParameters = preselectedTargetMethods.Where(method =>
+            {
+                ParameterInfo[] mParams = method.GetParameters();
+                int min = Math.Min(mParams.Length, proxyMethodParameters.Length);
+                for (int i = 0; i < min; i++)
+                {
+                    Type expectedType = mParams[i].ParameterType;
+                    Type actualType = proxyMethodParameters[i].ParameterType;
+
+                    if (expectedType == actualType)
+                    {
+                        continue;
+                    }
+
+                    if (expectedType.IsAssignableFrom(actualType))
+                    {
+                        continue;
+                    }
+
+                    if (!expectedType.IsValueType && actualType == typeof(object))
+                    {
+                        continue;
+                    }
+
+                    if (expectedType.IsValueType && actualType.IsValueType)
+                    {
+                        continue;
+                    }
+
+                    return false;
+                }
+                return true;
+            }).ToList();
+
+            if (sameParameters.Count == 1)
+            {
+                return sameParameters[0];
+            }
+
+            return preselectedTargetMethods[0];
         }
 
         private static void CreateMethodAccessor(ILGenerator il, MethodInfo method, bool strict)
@@ -482,18 +453,6 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             }
 
             il.Emit(OpCodes.Ret);
-        }
-
-        private readonly struct MethodAttributesSelector
-        {
-            public readonly MethodInfo Method;
-            public readonly List<DuckAttribute> Attributes;
-
-            public MethodAttributesSelector(MethodInfo methodInfo, List<DuckAttribute> attributes)
-            {
-                Method = methodInfo;
-                Attributes = attributes;
-            }
         }
     }
 }
