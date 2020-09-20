@@ -132,7 +132,8 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
                     // Load instance
                     if (!targetMethod.IsStatic)
                     {
-                        ILHelpers.LoadInstance(il, instanceField, targetType);
+                        il.Emit(OpCodes.Ldarg_0);
+                        il.Emit(OpCodes.Ldfld, instanceField);
                     }
 
                     // Load arguments

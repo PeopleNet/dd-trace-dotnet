@@ -34,7 +34,8 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             // Load the instance if needed
             if (!targetMethod.IsStatic)
             {
-                ILHelpers.LoadInstance(il, instanceField, targetType);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, instanceField);
             }
 
             // Load the indexer keys to the stack
@@ -175,7 +176,8 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             // Load the instance if needed
             if (!targetMethod.IsStatic)
             {
-                ILHelpers.LoadInstance(il, instanceField, targetType);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, instanceField);
             }
 
             // Load the indexer keys and set value to the stack

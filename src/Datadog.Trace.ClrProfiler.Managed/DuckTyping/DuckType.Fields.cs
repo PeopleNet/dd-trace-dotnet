@@ -22,19 +22,18 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             bool isPublicInstance = targetType.IsPublic || targetType.IsNestedPublic;
             Type returnType = targetField.FieldType;
 
+            // Load the instance
+            if (!targetField.IsStatic)
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, instanceField);
+            }
+
             // Load the field value to the stack
             if (isPublicInstance && targetField.IsPublic)
             {
                 // In case is public is pretty simple
-                if (targetField.IsStatic)
-                {
-                    il.Emit(OpCodes.Ldsfld, targetField);
-                }
-                else
-                {
-                    ILHelpers.LoadInstance(il, instanceField, targetType);
-                    il.Emit(OpCodes.Ldfld, targetField);
-                }
+                il.Emit(targetField.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, targetField);
             }
             else
             {
@@ -56,9 +55,7 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
 
                 if (!targetField.IsStatic)
                 {
-                    ILHelpers.LoadInstance(il, instanceField, targetType);
-
-                    // Emit the instance load
+                    // Emit the instance load in the dynamic method
                     dynIL.Emit(OpCodes.Ldarg_0);
                     if (targetField.DeclaringType != typeof(object))
                     {
@@ -118,17 +115,8 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
             // Load instance
             if (!targetField.IsStatic)
             {
-                if (!isPublicInstance || !targetField.IsPublic)
-                {
-                    // If the instance or the field is non public we load the instance field to the stack (needed when calling the Dynamic method to overpass the visibility checks)
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldfld, instanceField);
-                }
-                else
-                {
-                    // If the instance and the field are public then we load the instance field
-                    ILHelpers.LoadInstance(il, instanceField, targetType);
-                }
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, instanceField);
             }
 
             // Check if the type can be converted of if we need to enable duck chaining

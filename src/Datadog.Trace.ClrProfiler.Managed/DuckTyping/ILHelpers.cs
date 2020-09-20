@@ -148,18 +148,6 @@ namespace Datadog.Trace.ClrProfiler.DuckTyping
         };
 
         /// <summary>
-        /// Load instance field
-        /// </summary>
-        /// <param name="il">IlGenerator</param>
-        /// <param name="instanceField">Instance field</param>
-        /// <param name="instanceType">Instance type</param>
-        internal static void LoadInstance(ILGenerator il, FieldInfo instanceField, Type instanceType)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, instanceField);
-        }
-
-        /// <summary>
         /// Load instance argument
         /// </summary>
         /// <param name="il">ILGenerator</param>
